@@ -20,14 +20,14 @@ const MatchesScreen = ({ navigation }) => {
   useEffect(() => {
     loadMatches();
     setupSocketConnection();
-    
+
     return () => {
       // Cleanup socket connection
     };
   }, []);
 
   const setupSocketConnection = () => {
-    const socket = io('http://localhost:5000', {
+    const socket = io('http://192.168.1.7:8080', {
       auth: {
         token: axios.defaults.headers.common.Authorization?.replace('Bearer ', '')
       }
@@ -58,7 +58,7 @@ const MatchesScreen = ({ navigation }) => {
     try {
       setIsLoading(true);
       const response = await axios.get('/match');
-      
+
       if (response.data.matches) {
         setMatches(response.data.matches);
       }
@@ -90,14 +90,14 @@ const MatchesScreen = ({ navigation }) => {
 
   const formatLastMessage = (lastMessage) => {
     if (!lastMessage) return 'No messages yet';
-    
+
     const maxLength = 40;
     const message = lastMessage.content;
-    
+
     if (message.length > maxLength) {
       return message.substring(0, maxLength) + '...';
     }
-    
+
     return message;
   };
 
@@ -105,7 +105,7 @@ const MatchesScreen = ({ navigation }) => {
     const now = new Date();
     const messageTime = new Date(timestamp);
     const diffInHours = (now - messageTime) / (1000 * 60 * 60);
-    
+
     if (diffInHours < 1) {
       const diffInMinutes = Math.floor((now - messageTime) / (1000 * 60));
       return diffInMinutes <= 1 ? 'now' : `${diffInMinutes}m ago`;
@@ -138,7 +138,7 @@ const MatchesScreen = ({ navigation }) => {
               </Text>
             )}
           </View>
-          
+
           {/* Online Status Indicator */}
           <View style={[
             styles.onlineIndicator,
@@ -153,12 +153,12 @@ const MatchesScreen = ({ navigation }) => {
               <Text style={styles.verifiedBadge}>✓</Text>
             )}
           </View>
-          
+
           <Text style={styles.location}>
             📍 {item.user.location.address}
             {item.distance && ` • ${item.distance}km`}
           </Text>
-          
+
           <Text style={styles.lastMessage} numberOfLines={1}>
             {formatLastMessage(item.lastMessage)}
           </Text>
@@ -168,7 +168,7 @@ const MatchesScreen = ({ navigation }) => {
           <Text style={styles.timestamp}>
             {item.lastMessage ? formatTime(item.lastMessage.timestamp) : formatTime(item.matchedAt)}
           </Text>
-          
+
           {item.user.isVerified && (
             <View style={styles.verifiedContainer}>
               <Text style={styles.verifiedText}>Verified</Text>

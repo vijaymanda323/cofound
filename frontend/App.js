@@ -1,3 +1,5 @@
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -22,16 +24,20 @@ import VerificationScreen from './src/screens/settings/VerificationScreen';
 import DiscoverSettingsScreen from './src/screens/settings/DiscoverSettingsScreen';
 import HelpScreen from './src/screens/settings/HelpScreen';
 import FeedbackScreen from './src/screens/settings/FeedbackScreen';
+// New onboarding screens
+import GoalSelectionScreen from './src/screens/onboarding/GoalSelectionScreen';
+import RoleSelectionScreen from './src/screens/onboarding/RoleSelectionScreen';
 
 // Import context
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { OnboardingProvider } from './src/context/OnboardingContext';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // API Configuration
-axios.defaults.baseURL = 'http://192.168.1.10:8080/api';
+axios.defaults.baseURL = 'http://192.168.1.7:8080/api';
 
 // Auth Stack Navigator
 const AuthStack = () => (
@@ -41,6 +47,8 @@ const AuthStack = () => (
     <Stack.Screen name="Register" component={RegisterScreen} />
     <Stack.Screen name="OTP" component={OTPScreen} />
     <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+    <Stack.Screen name="GoalSelection" component={GoalSelectionScreen} />
+    <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
     <Stack.Screen name="ProfileCreation" component={ProfileCreationScreen} />
   </Stack.Navigator>
 );
@@ -48,7 +56,7 @@ const AuthStack = () => (
 // Main App Tab Navigator
 const MainTabs = () => {
   const { user } = useContext(AuthContext);
-  
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -65,24 +73,24 @@ const MainTabs = () => {
         headerTintColor: '#4A4A4A',
       }}
     >
-      <Tab.Screen 
-        name="Discovery" 
+      <Tab.Screen
+        name="Discovery"
         component={DiscoveryScreen}
         options={{
           tabBarLabel: 'Discover',
           headerShown: false,
         }}
       />
-      <Tab.Screen 
-        name="Matches" 
+      <Tab.Screen
+        name="Matches"
         component={MatchesScreen}
         options={{
           tabBarLabel: 'Matches',
           headerTitle: 'Your Matches',
         }}
       />
-      <Tab.Screen 
-        name="Settings" 
+      <Tab.Screen
+        name="Settings"
         component={SettingsScreen}
         options={{
           tabBarLabel: 'Settings',
@@ -97,36 +105,36 @@ const MainTabs = () => {
 const MainStack = () => (
   <Stack.Navigator>
     <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
-    <Stack.Screen 
-      name="Chat" 
+    <Stack.Screen
+      name="Chat"
       component={ChatScreen}
       options={({ route }) => ({
         headerTitle: route.params.userName || 'Chat',
         headerStyle: { backgroundColor: '#F7F7F7' },
       })}
     />
-    <Stack.Screen 
-      name="Documents" 
+    <Stack.Screen
+      name="Documents"
       component={DocumentsScreen}
       options={{ headerTitle: 'My Documents' }}
     />
-    <Stack.Screen 
-      name="Verification" 
+    <Stack.Screen
+      name="Verification"
       component={VerificationScreen}
       options={{ headerTitle: 'Verification Status' }}
     />
-    <Stack.Screen 
-      name="DiscoverSettings" 
+    <Stack.Screen
+      name="DiscoverSettings"
       component={DiscoverSettingsScreen}
       options={{ headerTitle: 'Discover Settings' }}
     />
-    <Stack.Screen 
-      name="Help" 
+    <Stack.Screen
+      name="Help"
       component={HelpScreen}
       options={{ headerTitle: 'Help & Support' }}
     />
-    <Stack.Screen 
-      name="Feedback" 
+    <Stack.Screen
+      name="Feedback"
       component={FeedbackScreen}
       options={{ headerTitle: 'Send Feedback' }}
     />
@@ -148,7 +156,7 @@ const AppNavigator = () => {
   // Check user registration step
   if (user) {
     const registrationStep = user.registrationStep || 0;
-    
+
     // Redirect based on registration step
     switch (registrationStep) {
       case 0:
@@ -159,14 +167,14 @@ const AppNavigator = () => {
           </NavigationContainer>
         );
       case 1:
-        // Onboarding completed, need profile creation
+        // Onboarding started, continue onboarding flow
         return (
           <NavigationContainer>
             <AuthStack />
           </NavigationContainer>
         );
       case 2:
-        // Profile completed, can access main app
+        // Onboarding completed, can access main app
         return (
           <NavigationContainer>
             <MainStack />
@@ -192,11 +200,15 @@ const AppNavigator = () => {
 // Main App Component
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AppNavigator />
-      </AuthProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <OnboardingProvider>
+          <AuthProvider>
+            <AppNavigator />
+          </AuthProvider>
+        </OnboardingProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 

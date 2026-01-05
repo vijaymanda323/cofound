@@ -94,7 +94,7 @@ const profileSchema = new mongoose.Schema({
   linkedinUrl: {
     type: String,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return !v || /^https?:\/\/(www\.)?linkedin\.com\/.*/.test(v);
       },
       message: 'Invalid LinkedIn URL format'

@@ -11,21 +11,21 @@ const authReducer = (state, action) => {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
     case 'SET_USER':
-      return { 
-        ...state, 
-        user: action.payload, 
+      return {
+        ...state,
+        user: action.payload,
         isLoading: false,
-        isAuthenticated: !!action.payload 
+        isAuthenticated: !!action.payload
       };
     case 'SET_TOKEN':
       return { ...state, token: action.payload };
     case 'LOGOUT':
-      return { 
-        ...state, 
-        user: null, 
-        token: null, 
+      return {
+        ...state,
+        user: null,
+        token: null,
         isLoading: false,
-        isAuthenticated: false 
+        isAuthenticated: false
       };
     case 'SET_ERROR':
       return { ...state, error: action.payload, isLoading: false };
@@ -63,16 +63,16 @@ export const AuthProvider = ({ children }) => {
     const loadAuthData = async () => {
       try {
         dispatch({ type: 'SET_LOADING', payload: true });
-        
+
         const token = await SecureStore.getItemAsync('authToken');
-        
+
         if (token) {
           setAuthToken(token);
           dispatch({ type: 'SET_TOKEN', payload: token });
-          
-          // Verify token and get user data
-          const response = await axios.get('/auth/me');
-          
+
+          // Verify token and get user data with timeout
+          const response = await axios.get('/auth/me', { timeout: 5000 });
+
           if (response.data.user) {
             dispatch({ type: 'SET_USER', payload: response.data.user });
           } else {
@@ -108,10 +108,10 @@ export const AuthProvider = ({ children }) => {
 
       // Store token securely
       await SecureStore.setItemAsync('authToken', token);
-      
+
       // Set token in axios headers
       setAuthToken(token);
-      
+
       // Update state
       dispatch({ type: 'SET_TOKEN', payload: token });
       dispatch({ type: 'SET_USER', payload: user });
@@ -131,7 +131,7 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: 'CLEAR_ERROR' });
 
       console.log('Attempting registration for:', email);
-      
+
       const response = await axios.post('/auth/register', {
         email,
         password,
@@ -144,10 +144,10 @@ export const AuthProvider = ({ children }) => {
 
       // Store token securely
       await SecureStore.setItemAsync('authToken', token);
-      
+
       // Set token in axios headers
       setAuthToken(token);
-      
+
       // Update state
       dispatch({ type: 'SET_TOKEN', payload: token });
       dispatch({ type: 'SET_USER', payload: user });
@@ -156,7 +156,7 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Registration error:', error);
       console.error('Error response:', error.response?.data);
-      
+
       const errorMessage = error.response?.data?.message || 'Registration failed';
       dispatch({ type: 'SET_ERROR', payload: errorMessage });
       return { success: false, error: errorMessage };
@@ -176,7 +176,7 @@ export const AuthProvider = ({ children }) => {
       });
 
       const { user } = response.data;
-      
+
       // Update user data in state
       dispatch({ type: 'SET_USER', payload: user });
 
@@ -210,12 +210,12 @@ export const AuthProvider = ({ children }) => {
   const updateRegistrationStep = async (step) => {
     try {
       await axios.put('/auth/registration-step', { step });
-      
+
       // Update local user state
       if (state.user) {
-        dispatch({ 
-          type: 'SET_USER', 
-          payload: { ...state.user, registrationStep: step } 
+        dispatch({
+          type: 'SET_USER',
+          payload: { ...state.user, registrationStep: step }
         });
       }
 
@@ -232,10 +232,10 @@ export const AuthProvider = ({ children }) => {
     try {
       // Remove token from secure storage
       await SecureStore.deleteItemAsync('authToken');
-      
+
       // Clear axios headers
       setAuthToken(null);
-      
+
       // Clear state
       dispatch({ type: 'LOGOUT' });
 

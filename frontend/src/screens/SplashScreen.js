@@ -30,9 +30,9 @@ const SplashScreen = ({ navigation }) => {
         if (user) {
           // User is logged in, check registration step
           if (user.registrationStep === 0) {
-            navigation.replace('Onboarding');
+            navigation.replace('GoalSelection');
           } else if (user.registrationStep === 1) {
-            navigation.replace('ProfileCreation');
+            navigation.replace('GoalSelection'); // Resume onboarding
           } else {
             // User is fully registered, navigation will be handled by AppNavigator
             // This is just a fallback
@@ -61,7 +61,7 @@ const SplashScreen = ({ navigation }) => {
         <View style={styles.logoContainer}>
           <Text style={styles.logo}>Found</Text>
         </View>
-        
+
         <View style={styles.taglineContainer}>
           <Text style={styles.tagline}>Find the right co-founder</Text>
         </View>

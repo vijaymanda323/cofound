@@ -11,7 +11,6 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -31,7 +30,7 @@ const LoginScreen = ({ navigation }) => {
     }
 
     const result = await login(identifier, password);
-    
+
     if (result.success) {
       // Navigation will be handled by AppNavigator based on user state
       clearError();

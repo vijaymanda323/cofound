@@ -22,7 +22,7 @@ router.post('/', auth, [
 ], async (req, res) => {
   try {
     console.log('Profile creation request received:', req.body);
-    
+
     // Filter out empty values before validation
     const filteredData = {};
     Object.keys(req.body).forEach(key => {
@@ -31,12 +31,12 @@ router.post('/', auth, [
         filteredData[key] = value;
       }
     });
-    
+
     console.log('Filtered profile data:', filteredData);
-    
+
     // Replace req.body with filtered data for validation
     req.body = filteredData;
-    
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.log('Profile validation errors:', errors.array());
@@ -45,29 +45,29 @@ router.post('/', auth, [
 
     const profileData = filteredData;
     console.log('Processed profile data:', profileData);
-    
+
     // Add missing required fields and fix data format
     if (profileData.location && !profileData.location.type) {
       profileData.location.type = 'Point'; // Default to Point type for coordinates
     }
-    
+
     // Handle goal field - if it's not a valid enum, set it to a default or remove it
     const validGoals = [
       'I have a startup',
       'I have startup ideas, looking for co-founder',
       'I want to join someone\'s startup'
     ];
-    
+
     if (profileData.goal && !validGoals.includes(profileData.goal)) {
       // For testing, either set a default or remove the field
       profileData.goal = 'I have startup ideas, looking for co-founder';
     }
-    
+
     // Sanitize text inputs only if they exist
     if (profileData.fullName) profileData.fullName = sanitizeInput(profileData.fullName);
     if (profileData.mission) profileData.mission = sanitizeInput(profileData.mission);
     if (profileData.bio) profileData.bio = sanitizeInput(profileData.bio);
-    
+
     // Sanitize skills and industries only if they exist
     if (profileData.skills && Array.isArray(profileData.skills)) {
       profileData.skills = profileData.skills.map(skill => ({
@@ -75,16 +75,16 @@ router.post('/', auth, [
         name: sanitizeInput(skill.name)
       }));
     }
-    
+
     if (profileData.industries && Array.isArray(profileData.industries)) {
-      profileData.industries = profileData.industries.map(industry => 
+      profileData.industries = profileData.industries.map(industry =>
         sanitizeInput(industry)
       );
     }
 
     // Check if profile already exists
     let profile = await Profile.findOne({ userId: req.user.id });
-    
+
     if (profile) {
       // Update existing profile
       Object.assign(profile, profileData);
@@ -104,7 +104,7 @@ router.post('/', auth, [
         if (skill.isCustom) {
           await Skill.findOneAndUpdate(
             { name: skill.name },
-            { 
+            {
               $inc: { usageCount: 1 },
               category: skill.category || 'other'
             },
@@ -144,7 +144,7 @@ router.get('/me', auth, async (req, res) => {
   try {
     const profile = await Profile.findOne({ userId: req.user.id })
       .populate('userId', 'email phone isEmailVerified isPhoneVerified');
-    
+
     if (!profile) {
       return res.status(404).json({ message: 'Profile not found' });
     }
@@ -159,9 +159,9 @@ router.get('/me', auth, async (req, res) => {
 // Get profile by user ID
 router.get('/:userId', auth, async (req, res) => {
   try {
-    const profile = await Profile.findOne({ 
+    const profile = await Profile.findOne({
       userId: req.params.userId,
-      isActive: true 
+      isActive: true
     }).populate('userId', 'email');
 
     if (!profile) {
@@ -179,7 +179,7 @@ router.get('/:userId', auth, async (req, res) => {
 router.put('/photo', auth, async (req, res) => {
   try {
     const { photoUrl } = req.body;
-    
+
     if (!photoUrl) {
       return res.status(400).json({ message: 'Photo URL is required' });
     }
@@ -217,11 +217,11 @@ router.put('/discover-settings', auth, [
     }
 
     const settings = req.body;
-    
+
     const profile = await Profile.findOneAndUpdate(
       { userId: req.user.id },
-      { 
-        $set: { 
+      {
+        $set: {
           'discoverSettings.maxDistance': settings.maxDistance,
           'discoverSettings.minAge': settings.minAge,
           'discoverSettings.maxAge': settings.maxAge,
@@ -278,7 +278,7 @@ router.get('/options/industries', async (req, res) => {
 router.get('/search/skills', async (req, res) => {
   try {
     const { query } = req.query;
-    
+
     if (!query || query.length < 2) {
       return res.json({ skills: [] });
     }
@@ -286,8 +286,8 @@ router.get('/search/skills', async (req, res) => {
     const skills = await Skill.find({
       name: { $regex: query, $options: 'i' }
     })
-    .sort({ usageCount: -1 })
-    .limit(20);
+      .sort({ usageCount: -1 })
+      .limit(20);
 
     res.json({ skills });
   } catch (error) {
@@ -299,7 +299,7 @@ router.get('/search/skills', async (req, res) => {
 router.get('/search/industries', async (req, res) => {
   try {
     const { query } = req.query;
-    
+
     if (!query || query.length < 2) {
       return res.json({ industries: [] });
     }
@@ -307,8 +307,8 @@ router.get('/search/industries', async (req, res) => {
     const industries = await Industry.find({
       name: { $regex: query, $options: 'i' }
     })
-    .sort({ usageCount: -1 })
-    .limit(20);
+      .sort({ usageCount: -1 })
+      .limit(20);
 
     res.json({ industries });
   } catch (error) {

@@ -16,13 +16,13 @@ router.post('/register', [
 ], async (req, res) => {
   try {
     console.log('Registration request received:', req.body);
-    
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       console.log('Validation errors:', errors.array());
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Validation failed',
-        errors: errors.array() 
+        errors: errors.array()
       });
     }
 
@@ -33,7 +33,7 @@ router.post('/register', [
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.isValid) {
       console.log('Password validation failed:', passwordValidation.errors);
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Password does not meet requirements',
         errors: passwordValidation.errors
       });
@@ -46,8 +46,8 @@ router.post('/register', [
 
     if (existingUser) {
       console.log('User already exists:', existingUser.email);
-      return res.status(400).json({ 
-        message: 'User with this email or phone already exists' 
+      return res.status(400).json({
+        message: 'User with this email or phone already exists'
       });
     }
 
@@ -78,8 +78,8 @@ router.post('/register', [
     const emailSent = await sendOTP(email, otp, 'verification');
     if (!emailSent) {
       console.log('Failed to send OTP email');
-      return res.status(500).json({ 
-        message: 'Failed to send verification email' 
+      return res.status(500).json({
+        message: 'Failed to send verification email'
       });
     }
 
@@ -101,9 +101,9 @@ router.post('/register', [
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Server error during registration',
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -304,7 +304,7 @@ router.put('/registration-step', auth, [
     }
 
     const { step } = req.body;
-    
+
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -325,20 +325,23 @@ router.put('/registration-step', auth, [
 
 // Google OAuth routes
 router.get('/google', (req, res) => {
+  // For Expo Go, use the correct deep link format
+  const redirectUri = 'exp://192.168.1.7:8081';
+
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
-    `redirect_uri=${encodeURIComponent(process.env.FRONTEND_URL + '/auth/google/callback')}&` +
+    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
     `response_type=code&` +
     `scope=profile email&` +
     `access_type=offline`;
-  
+
   res.json({ authUrl: googleAuthUrl });
 });
 
 router.post('/google/callback', async (req, res) => {
   try {
     const { code } = req.body;
-    
+
     if (!code) {
       return res.status(400).json({ message: 'Authorization code required' });
     }
@@ -354,7 +357,7 @@ router.post('/google/callback', async (req, res) => {
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
         code: code,
         grant_type: 'authorization_code',
-        redirect_uri: 'exp://192.168.1.10:8081',
+        redirect_uri: 'exp://192.168.1.7:8081',
       }),
     });
 
@@ -388,7 +391,7 @@ router.post('/google/callback', async (req, res) => {
         registrationStep: 1, // Skip to onboarding
         googleId: sanitizeInput(googleUser.id),
       });
-      
+
       await user.save();
     } else if (!user.googleId) {
       // Link Google account to existing user
@@ -397,7 +400,7 @@ router.post('/google/callback', async (req, res) => {
     }
 
     // Generate JWT token
-    const token = generateToken(user._id);
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({
       message: 'Google authentication successful',

@@ -130,7 +130,7 @@ const ProfileCreationScreen = ({ navigation, route }) => {
   const handleSkillLevelChange = (skillName, level) => {
     setProfile(prev => ({
       ...prev,
-      skills: prev.skills.map(s => 
+      skills: prev.skills.map(s =>
         s.name === skillName ? { ...s, level } : s
       )
     }));
@@ -139,46 +139,6 @@ const ProfileCreationScreen = ({ navigation, route }) => {
   const validateCurrentStep = () => {
     // For testing purposes, allow proceeding without strict validation
     return true;
-    
-    switch (currentStep) {
-      case 1:
-        const hasName = profile.fullName.trim();
-        const hasAddress = profile.location.address.trim();
-        if (!hasName || !hasAddress) {
-          const missingFields = [];
-          if (!hasName) missingFields.push('Full Name');
-          if (!hasAddress) missingFields.push('Location Address');
-          Alert.alert('Missing Required Fields', `Please fill in: ${missingFields.join(', ')}`);
-          return false;
-        }
-        return true;
-      case 2:
-        const hasMission = profile.mission.trim();
-        const hasGoal = profile.goal;
-        if (!hasMission || !hasGoal) {
-          const missingFields = [];
-          if (!hasMission) missingFields.push('Mission');
-          if (!hasGoal) missingFields.push('Goal');
-          Alert.alert('Missing Required Fields', `Please fill in: ${missingFields.join(', ')}`);
-          return false;
-        }
-        return true;
-      case 3:
-        const hasSkills = profile.skills.length > 0;
-        const hasIndustries = profile.industries.length > 0;
-        if (!hasSkills || !hasIndustries) {
-          const missingFields = [];
-          if (!hasSkills) missingFields.push('At least one Skill');
-          if (!hasIndustries) missingFields.push('At least one Industry');
-          Alert.alert('Missing Required Fields', `Please fill in: ${missingFields.join(', ')}`);
-          return false;
-        }
-        return true;
-      case 4:
-        return true; // All fields are optional in final step
-      default:
-        return false;
-    }
   };
 
   const handleNext = () => {
@@ -205,50 +165,33 @@ const ProfileCreationScreen = ({ navigation, route }) => {
     try {
       setIsLoading(true);
 
-      console.log('Saving profile with data:', profile);
-
-      // For demo, use default coordinates (in real app, use geocoding)
       const profileData = {
         ...profile,
         location: {
           ...profile.location,
-          coordinates: [77.2090, 28.6139], // Delhi coordinates as default
+          coordinates: [77.2090, 28.6139],
         },
         yearOfBirth: profile.yearOfBirth ? parseInt(profile.yearOfBirth) : undefined,
       };
 
-      console.log('Sending profile data to backend:', profileData);
-
       const response = await axios.post('/profile', profileData);
 
-      console.log('Profile creation response:', response.data);
-
       if (response.data) {
-        // Update registration step to 2 (profile completed)
         await updateRegistrationStep(2);
-        
+
         Alert.alert(
           'Success!',
           'Your profile has been created successfully!',
           [
             {
               text: 'OK',
-              onPress: () => {
-                // Navigation will be handled by AppNavigator
-              }
             }
           ]
         );
       }
     } catch (error) {
       console.error('Profile creation error:', error);
-      console.error('Error response:', error.response?.data);
-      
-      const errorMessage = error.response?.data?.message || 
-                           error.response?.data?.errors?.[0]?.msg || 
-                           'Failed to create profile. Please try again.';
-      
-      Alert.alert('Profile creation error', errorMessage);
+      Alert.alert('Profile creation error', 'Failed to create profile. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -257,7 +200,7 @@ const ProfileCreationScreen = ({ navigation, route }) => {
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Basic Information</Text>
-      
+
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Full Name *</Text>
         <TextInput
@@ -274,8 +217,8 @@ const ProfileCreationScreen = ({ navigation, route }) => {
         <TextInput
           style={styles.input}
           value={profile.location.address}
-          onChangeText={(text) => setProfile(prev => ({ 
-            ...prev, 
+          onChangeText={(text) => setProfile(prev => ({
+            ...prev,
             location: { ...prev.location, address: text }
           }))}
           placeholder="Enter your location"
@@ -324,19 +267,13 @@ const ProfileCreationScreen = ({ navigation, route }) => {
           {profile.profilePhoto ? 'Change Photo' : 'Add Profile Photo'}
         </Text>
       </TouchableOpacity>
-
-      {profile.profilePhoto && (
-        <View style={styles.photoPreview}>
-          <Text style={styles.photoPreviewText}>Photo selected ✓</Text>
-        </View>
-      )}
     </View>
   );
 
   const renderStep2 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Mission & Goals</Text>
-      
+
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Mission *</Text>
         <TextInput
@@ -349,7 +286,6 @@ const ProfileCreationScreen = ({ navigation, route }) => {
           numberOfLines={4}
           maxLength={500}
         />
-        <Text style={styles.charCount}>{profile.mission.length}/500</Text>
       </View>
 
       <View style={styles.inputContainer}>
@@ -358,13 +294,12 @@ const ProfileCreationScreen = ({ navigation, route }) => {
           style={[styles.input, styles.textArea]}
           value={profile.goal}
           onChangeText={(text) => setProfile(prev => ({ ...prev, goal: text }))}
-          placeholder="What is your specific goal? (e.g., find co-founder, join startup)"
+          placeholder="What is your specific goal?"
           placeholderTextColor="#7A7A7A"
           multiline
           numberOfLines={2}
           maxLength={200}
         />
-        <Text style={styles.charCount}>{profile.goal.length}/200</Text>
       </View>
 
       <View style={styles.inputContainer}>
@@ -391,7 +326,6 @@ const ProfileCreationScreen = ({ navigation, route }) => {
           numberOfLines={3}
           maxLength={200}
         />
-        <Text style={styles.charCount}>{profile.bio.length}/200</Text>
       </View>
     </View>
   );
@@ -399,7 +333,7 @@ const ProfileCreationScreen = ({ navigation, route }) => {
   const renderStep3 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Skills & Industries</Text>
-      
+
       <View style={styles.inputContainer}>
         <Text style={styles.label}>Skills *</Text>
         <View style={styles.selectedItems}>
@@ -412,9 +346,9 @@ const ProfileCreationScreen = ({ navigation, route }) => {
             </View>
           ))}
         </View>
-        
-        <TouchableOpacity 
-          style={styles.addButton} 
+
+        <TouchableOpacity
+          style={styles.addButton}
           onPress={() => setShowSkillModal(true)}
         >
           <Text style={styles.addButtonText}>+ Add Skill</Text>
@@ -433,9 +367,9 @@ const ProfileCreationScreen = ({ navigation, route }) => {
             </View>
           ))}
         </View>
-        
-        <TouchableOpacity 
-          style={styles.addButton} 
+
+        <TouchableOpacity
+          style={styles.addButton}
           onPress={() => setShowIndustryModal(true)}
         >
           <Text style={styles.addButtonText}>+ Add Industry</Text>
@@ -447,45 +381,17 @@ const ProfileCreationScreen = ({ navigation, route }) => {
   const renderStep4 = () => (
     <View style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Education & Links</Text>
-      
+
       <View style={styles.inputContainer}>
         <Text style={styles.label}>College / University</Text>
         <TextInput
           style={styles.input}
           value={profile.education.college}
-          onChangeText={(text) => setProfile(prev => ({ 
-            ...prev, 
+          onChangeText={(text) => setProfile(prev => ({
+            ...prev,
             education: { ...prev.education, college: text }
           }))}
           placeholder="Enter your college/university"
-          placeholderTextColor="#7A7A7A"
-        />
-      </View>
-
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Degree</Text>
-        <TextInput
-          style={styles.input}
-          value={profile.education.degree}
-          onChangeText={(text) => setProfile(prev => ({ 
-            ...prev, 
-            education: { ...prev.education, degree: text }
-          }))}
-          placeholder="e.g., Bachelor's, Master's, PhD"
-          placeholderTextColor="#7A7A7A"
-        />
-      </View>
-
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Field of Study</Text>
-        <TextInput
-          style={styles.input}
-          value={profile.education.field}
-          onChangeText={(text) => setProfile(prev => ({ 
-            ...prev, 
-            education: { ...prev.education, field: text }
-          }))}
-          placeholder="e.g., Computer Science, Business"
           placeholderTextColor="#7A7A7A"
         />
       </View>
@@ -505,139 +411,60 @@ const ProfileCreationScreen = ({ navigation, route }) => {
   );
 
   const renderSkillModal = () => (
-    <Modal
-      visible={showSkillModal}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowSkillModal(false)}
-    >
+    <Modal visible={showSkillModal} transparent animationType="slide">
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Add Skill</Text>
-          
           <ScrollView style={styles.optionsList}>
             {availableSkills.map((skill) => (
-              <TouchableOpacity
-                key={skill}
-                style={styles.optionItem}
-                onPress={() => handleAddSkill(skill)}
-              >
+              <TouchableOpacity key={skill} style={styles.optionItem} onPress={() => handleAddSkill(skill)}>
                 <Text style={styles.optionItemText}>{skill}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-
           <View style={styles.customInputContainer}>
-            <TextInput
-              style={styles.customInput}
-              value={customSkill}
-              onChangeText={setCustomSkill}
-              placeholder="Add custom skill"
-              placeholderTextColor="#7A7A7A"
-            />
-            <TouchableOpacity
-              style={styles.customAddButton}
-              onPress={() => handleAddSkill(customSkill)}
-            >
+            <TextInput style={styles.customInput} value={customSkill} onChangeText={setCustomSkill} placeholder="Add custom skill" />
+            <TouchableOpacity style={styles.customAddButton} onPress={() => handleAddSkill(customSkill)}>
               <Text style={styles.customAddButtonText}>Add</Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.modalCancelButton}
-            onPress={() => setShowSkillModal(false)}
-          >
-            <Text style={styles.modalCancelText}>Cancel</Text>
-          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowSkillModal(false)}><Text>Cancel</Text></TouchableOpacity>
         </View>
       </View>
     </Modal>
   );
 
   const renderIndustryModal = () => (
-    <Modal
-      visible={showIndustryModal}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowIndustryModal(false)}
-    >
+    <Modal visible={showIndustryModal} transparent animationType="slide">
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Add Industry</Text>
-          
           <ScrollView style={styles.optionsList}>
             {availableIndustries.map((industry) => (
-              <TouchableOpacity
-                key={industry}
-                style={styles.optionItem}
-                onPress={() => handleAddIndustry(industry)}
-              >
+              <TouchableOpacity key={industry} style={styles.optionItem} onPress={() => handleAddIndustry(industry)}>
                 <Text style={styles.optionItemText}>{industry}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-
           <View style={styles.customInputContainer}>
-            <TextInput
-              style={styles.customInput}
-              value={customIndustry}
-              onChangeText={setCustomIndustry}
-              placeholder="Add custom industry"
-              placeholderTextColor="#7A7A7A"
-            />
-            <TouchableOpacity
-              style={styles.customAddButton}
-              onPress={() => handleAddIndustry(customIndustry)}
-            >
+            <TextInput style={styles.customInput} value={customIndustry} onChangeText={setCustomIndustry} placeholder="Add custom industry" />
+            <TouchableOpacity style={styles.customAddButton} onPress={() => handleAddIndustry(customIndustry)}>
               <Text style={styles.customAddButtonText}>Add</Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.modalCancelButton}
-            onPress={() => setShowIndustryModal(false)}
-          >
-            <Text style={styles.modalCancelText}>Cancel</Text>
-          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowIndustryModal(false)}><Text>Cancel</Text></TouchableOpacity>
         </View>
       </View>
     </Modal>
   );
 
-  const renderProgressBar = () => (
-    <View style={styles.progressContainer}>
-      {[1, 2, 3, 4].map((step) => (
-        <View key={step} style={styles.progressStep}>
-          <View
-            style={[
-              styles.progressDot,
-              currentStep >= step && styles.progressDotActive,
-            ]}
-          />
-          {step < 4 && (
-            <View
-              style={[
-                styles.progressLine,
-                currentStep > step && styles.progressLineActive,
-              ]}
-            />
-          )}
-        </View>
-      ))}
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
+        <TouchableOpacity onPress={handleBack}><Text style={styles.backButtonText}>← Back</Text></TouchableOpacity>
         <Text style={styles.headerTitle}>Create Profile</Text>
-        <View style={styles.placeholder} />
+        <View style={{ width: 60 }} />
       </View>
-
-      {renderProgressBar()}
 
       <ScrollView style={styles.content}>
         {currentStep === 1 && renderStep1()}
@@ -647,14 +474,8 @@ const ProfileCreationScreen = ({ navigation, route }) => {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.nextButton, isLoading && styles.disabledButton]}
-          onPress={handleNext}
-          disabled={isLoading}
-        >
-          <Text style={styles.nextButtonText}>
-            {isLoading ? 'Saving...' : currentStep === 4 ? 'Complete Profile' : 'Next'}
-          </Text>
+        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
+          <Text style={styles.nextButtonText}>{isLoading ? 'Saving...' : currentStep === 4 ? 'Complete Profile' : 'Next'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -665,277 +486,43 @@ const ProfileCreationScreen = ({ navigation, route }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F7F7F7',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#1155ccff',
-    fontWeight: '500',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-  },
-  placeholder: {
-    width: 60,
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 20,
-  },
-  progressStep: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  progressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#D4D4D4',
-  },
-  progressDotActive: {
-    backgroundColor: '#1155ccff',
-  },
-  progressLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: '#D4D4D4',
-    marginHorizontal: 8,
-  },
-  progressLineActive: {
-    backgroundColor: '#1155ccff',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  stepContainer: {
-    paddingBottom: 20,
-  },
-  stepTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4A4A4A',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#4A4A4A',
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  charCount: {
-    fontSize: 12,
-    color: '#7A7A7A',
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  optionButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  selectedOption: {
-    backgroundColor: '#1155ccff',
-    borderColor: '#1155ccff',
-  },
-  optionText: {
-    fontSize: 14,
-    color: '#4A4A4A',
-  },
-  selectedOptionText: {
-    color: '#FFFFFF',
-  },
-  photoButton: {
-    backgroundColor: '#1155ccff',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  photoButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  photoPreview: {
-    backgroundColor: '#E8F5E8',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  photoPreviewText: {
-    color: '#00b000',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  selectedItems: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  selectedItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1155ccff',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  selectedItemText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    marginRight: 8,
-  },
-  removeItem: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  addButton: {
-    borderWidth: 1,
-    borderColor: '#1155ccff',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  addButtonText: {
-    color: '#1155ccff',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  footer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#F7F7F7',
-  },
-  nextButton: {
-    backgroundColor: '#1155ccff',
-    borderRadius: 8,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  nextButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  optionsList: {
-    maxHeight: 300,
-    marginBottom: 20,
-  },
-  optionItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  optionItemText: {
-    fontSize: 16,
-    color: '#4A4A4A',
-  },
-  customInputContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  customInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 16,
-    color: '#4A4A4A',
-  },
-  customAddButton: {
-    backgroundColor: '#1155ccff',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    justifyContent: 'center',
-  },
-  customAddButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  modalCancelButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  modalCancelText: {
-    fontSize: 16,
-    color: '#7A7A7A',
-  },
+  container: { flex: 1, backgroundColor: '#F7F7F7' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
+  backButtonText: { fontSize: 16, color: '#1155ccff' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold' },
+  content: { flex: 1, paddingHorizontal: 20 },
+  stepContainer: { paddingBottom: 20 },
+  stepTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  inputContainer: { marginBottom: 20 },
+  label: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#D4D4D4', borderRadius: 8, padding: 12 },
+  textArea: { height: 80, textAlignVertical: 'top' },
+  optionsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  optionButton: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#D4D4D4', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
+  selectedOption: { backgroundColor: '#1155ccff', borderColor: '#1155ccff' },
+  optionText: { fontSize: 14 },
+  selectedOptionText: { color: '#fff' },
+  photoButton: { backgroundColor: '#1155ccff', borderRadius: 8, padding: 12, alignItems: 'center', marginTop: 10 },
+  photoButtonText: { color: '#fff', fontWeight: '500' },
+  selectedItems: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  selectedItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1155ccff', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  selectedItemText: { color: '#fff', marginRight: 8 },
+  removeItem: { color: '#fff', fontWeight: 'bold' },
+  addButton: { borderWidth: 1, borderColor: '#1155ccff', borderRadius: 8, padding: 12, alignItems: 'center' },
+  addButtonText: { color: '#1155ccff' },
+  footer: { padding: 20, backgroundColor: '#F7F7F7' },
+  nextButton: { backgroundColor: '#1155ccff', borderRadius: 8, padding: 16, alignItems: 'center' },
+  nextButtonText: { color: '#fff', fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#fff', borderRadius: 16, padding: 20, width: '90%', maxHeight: '80%' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
+  optionsList: { maxHeight: 300, marginBottom: 20 },
+  optionItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E5E5' },
+  optionItemText: { fontSize: 16 },
+  customInputContainer: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  customInput: { flex: 1, borderWidth: 1, borderColor: '#D4D4D4', borderRadius: 8, paddingHorizontal: 12 },
+  customAddButton: { backgroundColor: '#1155ccff', borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center' },
+  customAddButtonText: { color: '#fff' },
 });
 
 export default ProfileCreationScreen;

@@ -24,26 +24,26 @@ const OnboardingScreen = ({ navigation }) => {
   const onboardingData = [
     {
       id: 1,
-      title: 'Match with Purpose',
-      subtitle: 'Connect with co-founders who share your vision and complement your skills',
-      icon: '🎯',
+      title: 'Find Your Co-founder',
+      subtitle: 'Connect with like-minded entrepreneurs who share your vision and complement your skills',
+      icon: '👥',
     },
     {
       id: 2,
-      title: 'Decide Your Goal',
-      subtitle: 'Whether you have a startup, ideas, or want to join - find your perfect match',
+      title: 'Build Your Startup',
+      subtitle: 'Turn your ideas into reality with the perfect partner by your side',
       icon: '🚀',
     },
     {
       id: 3,
-      title: 'Trust & Verification',
-      subtitle: 'Verified profiles ensure genuine connections and trustworthy partnerships',
-      icon: '✅',
+      title: 'Grow Together',
+      subtitle: 'Scale your business with shared goals and mutual support',
+      icon: '📈',
     },
     {
       id: 4,
-      title: 'The Right Beginning',
-      subtitle: 'Start your entrepreneurial journey with the right partner by your side',
+      title: 'Success Partnership',
+      subtitle: 'Achieve your entrepreneurial dreams with the right co-founder',
       icon: '🤝',
     },
   ];

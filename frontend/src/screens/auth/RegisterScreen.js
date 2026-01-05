@@ -18,7 +18,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 const RegisterScreen = ({ navigation }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
-  const { register, isLoading, error, clearError } = useAuth();
+  const { register, isLoading, error, clearError, login } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +45,7 @@ const RegisterScreen = ({ navigation }) => {
     }
 
     const result = await register(email, password, phone);
-    
+
     if (result.success) {
       // Navigation will be handled by AppNavigator based on user state
       clearError();
@@ -59,22 +59,22 @@ const RegisterScreen = ({ navigation }) => {
       // Get Google OAuth URL from backend
       const response = await axios.get('/auth/google');
       const { authUrl } = response.data;
-      
+
       // Open Google OAuth in browser
       const result = await WebBrowser.openAuthSessionAsync(
         authUrl,
-        'exp://192.168.1.10:8081' // Your app's deep link
+        'exp://192.168.1.7:8081' // Your app's deep link
       );
 
       if (result.type === 'success') {
         // Extract the auth code from the redirect URL
         const url = new URL(result.url);
         const code = url.searchParams.get('code');
-        
+
         if (code) {
           // Send code to backend
           const tokenResponse = await axios.post('/auth/google/callback', { code });
-          
+
           if (tokenResponse.data.token) {
             await login(tokenResponse.data.user.email, 'google-auth', tokenResponse.data.user);
           }
