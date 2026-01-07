@@ -52,7 +52,7 @@ router.post('/feedback', auth, [
     };
 
     const emailSent = await sendFeedbackEmail(emailData);
-    
+
     if (!emailSent) {
       console.error('Failed to send feedback email');
     }
@@ -88,7 +88,7 @@ router.get('/verification', auth, async (req, res) => {
 
     const verificationDocuments = profile.verificationDocuments || [];
     const verifiedDocuments = verificationDocuments.filter(doc => doc.verificationStatus === 'approved');
-    
+
     const isVerified = profile.isVerified || verifiedDocuments.length > 0;
 
     res.json({
@@ -120,15 +120,15 @@ router.get('/blocked', auth, async (req, res) => {
       userId: currentUserId,
       isActive: true
     })
-    .populate('blockedUserId', 'email')
-    .sort({ createdAt: -1 });
+      .populate('blockedUserId', 'email')
+      .sort({ createdAt: -1 });
 
     // Get profiles for blocked users
     const blockedProfiles = await Promise.all(
       blockedUsers.map(async (block) => {
-        const profile = await Profile.findOne({ 
+        const profile = await Profile.findOne({
           userId: block.blockedUserId._id,
-          isActive: true 
+          isActive: true
         });
 
         return {
@@ -236,7 +236,18 @@ router.get('/discover', auth, async (req, res) => {
     const profile = await Profile.findOne({ userId: currentUserId });
 
     if (!profile) {
-      return res.status(404).json({ message: 'Profile not found' });
+      // Return default settings for users without profiles yet
+      return res.json({
+        discoverSettings: {
+          maxDistance: 100,
+          minAge: 18,
+          maxAge: 65,
+          preferredGoals: [],
+          preferredSkills: [],
+          preferredIndustries: [],
+          goalOverride: null
+        }
+      });
     }
 
     res.json({
@@ -265,14 +276,15 @@ router.put('/discover', auth, [
 
     const profile = await Profile.findOneAndUpdate(
       { userId: currentUserId },
-      { 
-        $set: { 
+      {
+        $set: {
           'discoverSettings.maxDistance': settings.maxDistance,
           'discoverSettings.minAge': settings.minAge,
           'discoverSettings.maxAge': settings.maxAge,
           'discoverSettings.preferredGoals': settings.preferredGoals || [],
           'discoverSettings.preferredSkills': settings.preferredSkills || [],
-          'discoverSettings.preferredIndustries': settings.preferredIndustries || []
+          'discoverSettings.preferredIndustries': settings.preferredIndustries || [],
+          'discoverSettings.goalOverride': settings.goalOverride || null
         }
       },
       { new: true }
@@ -331,7 +343,7 @@ router.delete('/account', auth, async (req, res) => {
 
     // Deactivate user account
     await User.findByIdAndUpdate(currentUserId, { isActive: false });
-    
+
     // Deactivate profile
     await Profile.findOneAndUpdate(
       { userId: currentUserId },
@@ -340,7 +352,7 @@ router.delete('/account', auth, async (req, res) => {
 
     // Deactivate all blocks (both as blocker and blocked)
     await Block.updateMany(
-      { 
+      {
         $or: [
           { userId: currentUserId },
           { blockedUserId: currentUserId }

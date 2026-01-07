@@ -1,416 +1,245 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
-  StyleSheet,
   FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  SafeAreaView,
+  ActivityIndicator,
   RefreshControl,
-  Alert,
+  Image,
 } from 'react-native';
-import axios from 'axios';
-import io from 'socket.io-client';
+import API from '../../services/api';
+import { socket } from '../../services/socket';
+import { DUMMY_MATCHES } from '../../data/dummyData';
 
 const MatchesScreen = ({ navigation }) => {
   const [matches, setMatches] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
 
-  useEffect(() => {
-    loadMatches();
-    setupSocketConnection();
-
-    return () => {
-      // Cleanup socket connection
-    };
-  }, []);
-
-  const setupSocketConnection = () => {
-    const socket = io('http://192.168.1.7:8080', {
-      auth: {
-        token: axios.defaults.headers.common.Authorization?.replace('Bearer ', '')
-      }
-    });
-
-    socket.on('user_status_changed', (data) => {
-      if (data.status === 'online') {
-        setOnlineUsers(prev => new Set(prev).add(data.userId));
-      } else {
-        setOnlineUsers(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(data.userId);
-          return newSet;
-        });
-      }
-    });
-
-    socket.on('connect', () => {
-      console.log('Connected to socket server');
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Disconnected from socket server');
-    });
-  };
-
-  const loadMatches = async () => {
+  const fetchMatches = useCallback(async (isRefresh = false) => {
     try {
-      setIsLoading(true);
-      const response = await axios.get('/match');
+      if (!isRefresh) setLoading(true);
+      const res = await API.get('/match');
+      // Filter to show only matches WITHOUT messages (new connections)
+      const newMatches = (res.data.matches || []).filter(match => !match.lastMessage);
 
-      if (response.data.matches) {
-        setMatches(response.data.matches);
+      if (newMatches.length > 0) {
+        setMatches(newMatches);
+      } else {
+        // Use dummy matches that have NO messages
+        const dummyNewMatches = DUMMY_MATCHES.filter(match => !match.lastMessage);
+        setMatches(dummyNewMatches);
       }
     } catch (error) {
-      console.error('Error loading matches:', error);
-      Alert.alert('Error', 'Failed to load matches');
+      console.error('Error fetching matches:', error);
+      const dummyNewMatches = DUMMY_MATCHES.filter(match => !match.lastMessage);
+      setMatches(dummyNewMatches);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleRefresh = async () => {
+  useEffect(() => {
+    fetchMatches();
+
+    const handleStatusChange = ({ userId, status }) => {
+      setOnlineUsers(prev => {
+        const next = new Set(prev);
+        if (status === 'online') next.add(userId);
+        else next.delete(userId);
+        return next;
+      });
+    };
+
+    socket.on('user_status_changed', handleStatusChange);
+
+    return () => {
+      socket.off('user_status_changed', handleStatusChange);
+    };
+  }, [fetchMatches]);
+
+  const onRefresh = () => {
     setRefreshing(true);
-    await loadMatches();
-    setRefreshing(false);
+    fetchMatches(true);
   };
 
-  const handleMatchPress = (match) => {
-    navigation.navigate('Chat', {
-      matchId: match.matchId,
-      userName: match.user.fullName,
-      userProfile: match.user,
-    });
-  };
+  const renderItem = ({ item }) => {
+    const isOnline = onlineUsers.has(item.user.userId);
+    const lastMsg = item.lastMessage;
 
-  const isUserOnline = (userId) => {
-    return onlineUsers.has(userId);
-  };
+    return (
+      <TouchableOpacity
+        style={styles.matchItem}
+        onPress={() => navigation.navigate('ProfileDetail', {
+          profile: item.user
+        })}
+      >
+        <View style={styles.avatarContainer}>
+          {item.user.profilePhoto ? (
+            <Image
+              source={{ uri: item.user.profilePhoto }}
+              style={[
+                styles.avatarSmall,
+                { borderWidth: 3, borderColor: isOnline ? '#00b000' : '#b7b7b7' }
+              ]}
+            />
+          ) : (
+            <View style={[
+              styles.avatarPlaceholder,
+              { borderWidth: 3, borderColor: isOnline ? '#00b000' : '#b7b7b7' }
+            ]}>
+              <Text style={{ fontSize: 20 }}>👤</Text>
+            </View>
+          )}
+        </View>
 
-  const formatLastMessage = (lastMessage) => {
-    if (!lastMessage) return 'No messages yet';
-
-    const maxLength = 40;
-    const message = lastMessage.content;
-
-    if (message.length > maxLength) {
-      return message.substring(0, maxLength) + '...';
-    }
-
-    return message;
-  };
-
-  const formatTime = (timestamp) => {
-    const now = new Date();
-    const messageTime = new Date(timestamp);
-    const diffInHours = (now - messageTime) / (1000 * 60 * 60);
-
-    if (diffInHours < 1) {
-      const diffInMinutes = Math.floor((now - messageTime) / (1000 * 60));
-      return diffInMinutes <= 1 ? 'now' : `${diffInMinutes}m ago`;
-    } else if (diffInHours < 24) {
-      return `${Math.floor(diffInHours)}h ago`;
-    } else if (diffInHours < 48) {
-      return 'Yesterday';
-    } else {
-      return messageTime.toLocaleDateString();
-    }
-  };
-
-  const renderMatchItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.matchItem}
-      onPress={() => handleMatchPress(item)}
-    >
-      <View style={styles.matchHeader}>
-        <View style={styles.profileContainer}>
-          {/* Profile Photo */}
-          <View style={[
-            styles.profilePhoto,
-            isUserOnline(item.user.userId) && styles.onlineProfilePhoto
-          ]}>
-            {item.user.profilePhoto ? (
-              <Text style={styles.photoText}>📷</Text>
-            ) : (
-              <Text style={styles.avatarText}>
-                {item.user.fullName.charAt(0).toUpperCase()}
+        <View style={styles.matchInfo}>
+          <View style={styles.matchHeader}>
+            <Text style={styles.matchName}>
+              {item.user.fullName}
+            </Text>
+            {item.lastInteraction && (
+              <Text style={styles.timeText}>
+                {new Date(item.lastInteraction).toLocaleDateString()}
               </Text>
             )}
           </View>
 
-          {/* Online Status Indicator */}
-          <View style={[
-            styles.onlineIndicator,
-            isUserOnline(item.user.userId) ? styles.onlineIndicatorActive : styles.onlineIndicatorInactive
-          ]} />
-        </View>
-
-        <View style={styles.matchInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.userName}>{item.user.fullName}</Text>
-            {item.user.isVerified && (
-              <Text style={styles.verifiedBadge}>✓</Text>
-            )}
-          </View>
-
-          <Text style={styles.location}>
-            📍 {item.user.location.address}
-            {item.distance && ` • ${item.distance}km`}
+          <Text style={styles.roleText} numberOfLines={1}>
+            {item.user.role || 'Role not specified'}
           </Text>
-
-          <Text style={styles.lastMessage} numberOfLines={1}>
-            {formatLastMessage(item.lastMessage)}
-          </Text>
-        </View>
-
-        <View style={styles.matchMeta}>
-          <Text style={styles.timestamp}>
-            {item.lastMessage ? formatTime(item.lastMessage.timestamp) : formatTime(item.matchedAt)}
-          </Text>
-
-          {item.user.isVerified && (
-            <View style={styles.verifiedContainer}>
-              <Text style={styles.verifiedText}>Verified</Text>
-            </View>
+          {item.user.location?.address && (
+            <Text style={styles.locationText} numberOfLines={1}>
+              📍 {item.user.location.address}
+            </Text>
           )}
         </View>
-      </View>
-
-      {/* Connection Info */}
-      <View style={styles.connectionInfo}>
-        <Text style={styles.connectionText}>
-          Connected {formatTime(item.matchedAt)}
-        </Text>
-        <Text style={styles.messageCount}>
-          {item.messageCount} {item.messageCount === 1 ? 'message' : 'messages'}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>💫</Text>
-      <Text style={styles.emptyTitle}>No Matches Yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Start swiping to find your perfect co-founder match!
-      </Text>
-      <TouchableOpacity
-        style={styles.discoverButton}
-        onPress={() => navigation.navigate('Discovery')}
-      >
-        <Text style={styles.discoverButtonText}>Start Discovering</Text>
+        <Text style={styles.chevron}>›</Text>
       </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
-  if (isLoading) {
+  if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading matches...</Text>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#FF3B30" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safe}>
       <FlatList
         data={matches}
-        renderItem={renderMatchItem}
-        keyExtractor={(item) => item.matchId.toString()}
-        contentContainerStyle={matches.length === 0 ? styles.emptyListContainer : styles.listContainer}
+        keyExtractor={item => item.matchId}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#1155ccff']}
-            tintColor="#1155ccff"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF3B30" />
         }
-        ListEmptyComponent={renderEmptyState}
-        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No matches yet.</Text>
+            <Text style={styles.emptySubText}>Keep swiping to find your co-founder!</Text>
+          </View>
+        }
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#FFFFFF',
   },
-  loadingContainer: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
-  loadingText: {
-    fontSize: 16,
-    color: '#7A7A7A',
-  },
-  listContainer: {
-    padding: 16,
-  },
-  emptyListContainer: {
-    flexGrow: 1,
+  list: {
+    paddingHorizontal: 20,
   },
   matchItem: {
-    backgroundColor: '#EFE9E1',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  matchHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  profileContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  profilePhoto: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#b7b7b7',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F1F6',
   },
-  onlineProfilePhoto: {
-    borderColor: '#00b000',
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 15,
   },
-  photoText: {
-    fontSize: 20,
+  avatarSmall: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-  },
-  onlineIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#EFE9E1',
-  },
-  onlineIndicatorActive: {
-    backgroundColor: '#00b000',
-  },
-  onlineIndicatorInactive: {
-    backgroundColor: '#b7b7b7',
+  avatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F0F1F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   matchInfo: {
     flex: 1,
   },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  userName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginRight: 8,
-  },
-  verifiedBadge: {
-    color: '#00b000',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  location: {
-    fontSize: 14,
-    color: '#7A7A7A',
-    marginBottom: 4,
-  },
-  lastMessage: {
-    fontSize: 14,
-    color: '#4A4A4A',
-    flex: 1,
-  },
-  matchMeta: {
-    alignItems: 'flex-end',
-    marginLeft: 12,
-  },
-  timestamp: {
-    fontSize: 12,
-    color: '#7A7A7A',
-    marginBottom: 4,
-  },
-  verifiedContainer: {
-    backgroundColor: '#E8F5E8',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  verifiedText: {
-    fontSize: 10,
-    color: '#00b000',
-    fontWeight: '500',
-  },
-  connectionInfo: {
+  matchHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#D4D4D4',
+    marginBottom: 4,
   },
-  connectionText: {
-    fontSize: 12,
-    color: '#7A7A7A',
+  matchName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E1E2D',
   },
-  messageCount: {
+  timeText: {
     fontSize: 12,
-    color: '#7A7A7A',
+    color: '#8E8E93',
+  },
+  roleText: {
+    fontSize: 14,
+    color: '#6E7BFF',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#6F6F85',
+  },
+  chevron: {
+    fontSize: 24,
+    color: '#D1D1D1',
+    marginLeft: 10,
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 100,
     paddingHorizontal: 40,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 24,
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E1E2D',
+    marginBottom: 10,
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
+  emptySubText: {
     fontSize: 16,
-    color: '#7A7A7A',
+    color: '#6F6F85',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  discoverButton: {
-    backgroundColor: '#1155ccff',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  discoverButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
+    lineHeight: 22,
   },
 });
 

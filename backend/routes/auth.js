@@ -326,7 +326,7 @@ router.put('/registration-step', auth, [
 // Google OAuth routes
 router.get('/google', (req, res) => {
   // For Expo Go, use the correct deep link format
-  const redirectUri = 'exp://192.168.1.7:8081';
+  const redirectUri = 'exp://192.168.29.175:8081';
 
   const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
     `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
@@ -357,7 +357,7 @@ router.post('/google/callback', async (req, res) => {
         client_secret: process.env.GOOGLE_CLIENT_SECRET,
         code: code,
         grant_type: 'authorization_code',
-        redirect_uri: 'exp://192.168.1.7:8081',
+        redirect_uri: 'exp://192.168.29.175:8081',
       }),
     });
 

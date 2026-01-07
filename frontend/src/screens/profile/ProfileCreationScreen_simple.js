@@ -74,14 +74,14 @@ const ProfileCreationScreen = ({ navigation, route }) => {
         fullName: profile.fullName,
         location: {
           type: 'Point',
-          coordinates: [0, 0], // Default coordinates, backend should ideally handle geocoding or use current location
+          coordinates: [0, 0], // Default coordinates
           address: profile.location
         },
         gender: profile.gender.toLowerCase(),
         yearOfBirth: parseInt(profile.yearOfBirth),
         mission: profile.mission,
         goal: profile.goal === 'I have startup ideas, looking for a co-founder'
-          ? 'I have startup ideas, looking for co-founder' // Backend expects no "a"
+          ? 'I have startup ideas, looking for co-founder'
           : profile.goal,
         skills: profile.skills.map(skill => ({
           name: skill,
@@ -92,7 +92,7 @@ const ProfileCreationScreen = ({ navigation, route }) => {
         experience: profile.experience ? parseInt(profile.experience) : 0,
         bio: profile.bio,
         education: {
-          college: profile.education // Map string to college field
+          college: profile.education
         },
         linkedinUrl: profile.linkedinUrl
       };

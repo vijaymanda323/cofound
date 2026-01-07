@@ -4,21 +4,24 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
+  ScrollView,
   Alert,
   RefreshControl,
-  Modal,
+  SafeAreaView,
+  Platform,
+  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import axios from 'axios';
+import API from '../../services/api';
 
 const DocumentsScreen = ({ navigation }) => {
   const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState(null);
-  const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   useEffect(() => {
     loadDocuments();
@@ -27,14 +30,13 @@ const DocumentsScreen = ({ navigation }) => {
   const loadDocuments = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/documents');
-      
+      const response = await API.get('/documents');
       if (response.data.documents) {
         setDocuments(response.data.documents);
       }
     } catch (error) {
       console.error('Error loading documents:', error);
-      Alert.alert('Error', 'Failed to load documents');
+      // Alert.alert('Error', 'Failed to load documents');
     } finally {
       setIsLoading(false);
     }
@@ -51,559 +53,282 @@ const DocumentsScreen = ({ navigation }) => {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
           'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-powerpoint',
-          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'application/docx',
+          'application/pptx',
           'image/jpeg',
-          'image/jpg',
           'image/png',
         ],
         copyToCacheDirectory: true,
-        multiple: false,
       });
 
       if (!result.canceled) {
-        await uploadDocument(result.assets[0]);
+        setSelectedFile(result.assets[0]);
       }
     } catch (error) {
       console.error('Error picking document:', error);
-      Alert.alert('Error', 'Failed to pick document');
     }
   };
 
-  const uploadDocument = async (asset) => {
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      Alert.alert('No file selected', 'Please select a file first.');
+      return;
+    }
+
     try {
       setUploading(true);
-
       const formData = new FormData();
       formData.append('document', {
-        uri: asset.uri,
-        type: asset.mimeType,
-        name: asset.name,
+        uri: selectedFile.uri,
+        type: selectedFile.mimeType,
+        name: selectedFile.name,
       });
       formData.append('documentType', 'other');
 
-      const response = await axios.post('/documents/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      await API.post('/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      if (response.data.document) {
-        Alert.alert('Success', 'Document uploaded successfully');
-        loadDocuments();
-      }
+      Alert.alert('Success', 'Document uploaded successfully');
+      setSelectedFile(null);
+      loadDocuments();
     } catch (error) {
       console.error('Error uploading document:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to upload document';
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', 'Failed to upload document');
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDeleteDocument = (document) => {
-    Alert.alert(
-      'Delete Document',
-      `Are you sure you want to delete "${document.fileName}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await axios.delete(`/documents/${document.id}`);
-              Alert.alert('Success', 'Document deleted successfully');
-              loadDocuments();
-            } catch (error) {
-              console.error('Error deleting document:', error);
-              Alert.alert('Error', 'Failed to delete document');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleDocumentPress = (document) => {
-    setSelectedDocument(document);
-    setShowDocumentModal(true);
-  };
-
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
-
-  const getDocumentIcon = (fileType) => {
-    switch (fileType.toLowerCase()) {
-      case 'pdf':
-        return '📄';
-      case 'docx':
-      case 'doc':
-        return '📝';
-      case 'pptx':
-      case 'ppt':
-        return '📊';
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-        return '🖼️';
-      default:
-        return '📎';
-    }
-  };
-
-  const getVerificationStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-        return '#00b000';
-      case 'rejected':
-        return '#ff4444';
-      default:
-        return '#ffaa00';
-    }
-  };
-
-  const renderDocumentItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.documentItem}
-      onPress={() => handleDocumentPress(item)}
-    >
-      <View style={styles.documentIcon}>
-        <Text style={styles.documentIconText}>{getDocumentIcon(item.fileType)}</Text>
-      </View>
-
-      <View style={styles.documentInfo}>
-        <Text style={styles.documentName} numberOfLines={1}>
-          {item.fileName}
-        </Text>
-        
-        <View style={styles.documentMeta}>
-          <Text style={styles.documentSize}>{formatFileSize(item.fileSize)}</Text>
-          <Text style={styles.documentDate}>{formatDate(item.uploadedAt)}</Text>
-        </View>
-
-        {item.documentType === 'verification' && (
-          <View style={styles.verificationStatus}>
-            <Text style={[
-              styles.verificationStatusText,
-              { color: getVerificationStatusColor(item.verificationStatus) }
-            ]}>
-              {item.verificationStatus === 'approved' && '✓ Verified'}
-              {item.verificationStatus === 'rejected' && '✗ Rejected'}
-              {item.verificationStatus === 'pending' && '⏳ Pending'}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => handleDeleteDocument(item)}
-      >
-        <Text style={styles.deleteButtonText}>🗑️</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>📁</Text>
-      <Text style={styles.emptyTitle}>No Documents Yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Upload your documents for verification and profile enhancement
-      </Text>
-      <TouchableOpacity
-        style={styles.uploadButton}
-        onPress={handlePickDocument}
-        disabled={uploading}
-      >
-        <Text style={styles.uploadButtonText}>
-          {uploading ? 'Uploading...' : 'Upload First Document'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderDocumentModal = () => {
-    if (!selectedDocument) return null;
-
-    return (
-      <Modal
-        visible={showDocumentModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDocumentModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.documentModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Document Details</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowDocumentModal(false)}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalContent}>
-              <View style={styles.modalDocumentIcon}>
-                <Text style={styles.modalDocumentIconText}>
-                  {getDocumentIcon(selectedDocument.fileType)}
-                </Text>
-              </View>
-
-              <Text style={styles.modalDocumentName}>
-                {selectedDocument.fileName}
-              </Text>
-
-              <View style={styles.modalDetails}>
-                <View style={styles.modalDetailRow}>
-                  <Text style={styles.modalDetailLabel}>Type:</Text>
-                  <Text style={styles.modalDetailValue}>
-                    {selectedDocument.fileType.toUpperCase()}
-                  </Text>
-                </View>
-
-                <View style={styles.modalDetailRow}>
-                  <Text style={styles.modalDetailLabel}>Size:</Text>
-                  <Text style={styles.modalDetailValue}>
-                    {formatFileSize(selectedDocument.fileSize)}
-                  </Text>
-                </View>
-
-                <View style={styles.modalDetailRow}>
-                  <Text style={styles.modalDetailLabel}>Uploaded:</Text>
-                  <Text style={styles.modalDetailValue}>
-                    {formatDate(selectedDocument.uploadedAt)}
-                  </Text>
-                </View>
-
-                <View style={styles.modalDetailRow}>
-                  <Text style={styles.modalDetailLabel}>Category:</Text>
-                  <Text style={styles.modalDetailValue}>
-                    {selectedDocument.documentType.charAt(0).toUpperCase() + 
-                     selectedDocument.documentType.slice(1)}
-                  </Text>
-                </View>
-
-                {selectedDocument.documentType === 'verification' && (
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Status:</Text>
-                    <Text style={[
-                      styles.modalDetailValue,
-                      { color: getVerificationStatusColor(selectedDocument.verificationStatus) }
-                    ]}>
-                      {selectedDocument.verificationStatus.charAt(0).toUpperCase() + 
-                       selectedDocument.verificationStatus.slice(1)}
-                    </Text>
-                  </View>
-                )}
-
-                {selectedDocument.verificationNotes && (
-                  <View style={styles.modalDetailRow}>
-                    <Text style={styles.modalDetailLabel}>Notes:</Text>
-                    <Text style={styles.modalDetailValue}>
-                      {selectedDocument.verificationNotes}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalActionButton}
-                onPress={() => setShowDocumentModal(false)}
-              >
-                <Text style={styles.modalActionButtonText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    );
+  const handleDelete = (id) => {
+    Alert.alert('Delete', 'Delete this document?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await API.delete(`/documents/${id}`);
+            loadDocuments();
+          } catch (err) {
+            Alert.alert('Error', 'Failed to delete');
+          }
+        }
+      }
+    ]);
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" />
+
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Documents</Text>
-        <TouchableOpacity
-          style={styles.uploadHeaderButton}
-          onPress={handlePickDocument}
-          disabled={uploading}
-        >
-          <Text style={styles.uploadHeaderButtonText}>
-            {uploading ? '⏳' : '+ Upload'}
-          </Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={24} color="#000" />
         </TouchableOpacity>
+        <Text style={styles.headerLogo}>FOUND.</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      <FlatList
-        data={documents}
-        renderItem={renderDocumentItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={documents.length === 0 ? styles.emptyListContainer : styles.listContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#1155ccff']}
-            tintColor="#1155ccff"
-          />
-        }
-        ListEmptyComponent={renderEmptyState}
-        showsVerticalScrollIndicator={false}
-      />
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      >
+        <View style={styles.titleContainer}>
+          <Text style={styles.pageTitle}>My Documents</Text>
+        </View>
 
-      {renderDocumentModal()}
-    </View>
+        {/* Documents List Card */}
+        <View style={styles.listCard}>
+          {isLoading && !refreshing ? (
+            <ActivityIndicator color="#1155cc" style={{ padding: 20 }} />
+          ) : documents.length > 0 ? (
+            documents.map((doc, index) => (
+              <View key={doc.id} style={styles.docItem}>
+                <View style={styles.docLeft}>
+                  <Text style={styles.docIndex}>{index + 1}. </Text>
+                  <Text style={styles.docName} numberOfLines={1}>{doc.fileName}</Text>
+                </View>
+                <TouchableOpacity onPress={() => handleDelete(doc.id)}>
+                  <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                </TouchableOpacity>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No documents uploaded yet.</Text>
+          )}
+        </View>
+
+        {/* Select File Button */}
+        <View style={styles.spacing} />
+
+        {selectedFile && (
+          <View style={styles.selectedFileBox}>
+            <Text style={styles.selectedLabel}>Selected:</Text>
+            <Text style={styles.selectedName}>{selectedFile.name}</Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.selectBtn}
+          onPress={handlePickDocument}
+        >
+          <Text style={styles.selectBtnText}>Select a file</Text>
+        </TouchableOpacity>
+        <Text style={styles.formatHint}>.pdf, .docx, .ppt, .jpg, .png</Text>
+
+        <View style={{ flex: 1 }} />
+
+        {/* Upload Button */}
+        <TouchableOpacity
+          style={[styles.uploadBtn, !selectedFile && styles.uploadBtnDisabled]}
+          onPress={handleUpload}
+          disabled={!selectedFile || uploading}
+        >
+          {uploading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.uploadBtnText}>Upload</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#FFFFFF',
+  },
+  contentContainer: {
+    paddingHorizontal: 30,
+    paddingBottom: 40,
+    minHeight: '100%',
   },
   header: {
+    paddingHorizontal: 15,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 15 : 15,
+    paddingBottom: 15,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#EFE9E1',
+    justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#D4D4D4',
+    borderBottomColor: '#F2F2F2',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
+  headerLogo: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
-  uploadHeaderButton: {
-    backgroundColor: '#1155ccff',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  titleContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 30,
   },
-  uploadHeaderButtonText: {
-    color: '#FFFFFF',
+  pageTitle: {
     fontSize: 14,
-    fontWeight: '500',
-  },
-  listContainer: {
-    padding: 16,
-  },
-  emptyListContainer: {
-    flexGrow: 1,
-  },
-  documentItem: {
-    backgroundColor: '#EFE9E1',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  documentIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  documentIconText: {
-    fontSize: 20,
-  },
-  documentInfo: {
-    flex: 1,
-  },
-  documentName: {
-    fontSize: 16,
     fontWeight: '600',
-    color: '#4A4A4A',
-    marginBottom: 4,
+    color: '#333',
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 15,
+    paddingVertical: 5,
+    borderRadius: 5,
   },
-  documentMeta: {
+  listCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 25,
+    borderWidth: 1.5,
+    borderColor: '#333',
+    minHeight: 150,
+  },
+  docItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  documentSize: {
-    fontSize: 12,
-    color: '#7A7A7A',
-  },
-  documentDate: {
-    fontSize: 12,
-    color: '#7A7A7A',
-  },
-  verificationStatus: {
-    alignSelf: 'flex-start',
-  },
-  verificationStatusText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  deleteButtonText: {
-    fontSize: 16,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    marginBottom: 15,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 24,
+  docLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  emptySubtitle: {
+  docIndex: {
     fontSize: 16,
-    color: '#7A7A7A',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+    fontWeight: '600',
+    color: '#333',
   },
-  uploadButton: {
+  docName: {
+    fontSize: 16,
+    color: '#444',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#999',
+    marginTop: 40,
+  },
+  spacing: {
+    height: 100,
+  },
+  selectBtn: {
     backgroundColor: '#1155ccff',
-    borderRadius: 8,
     paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  uploadButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
     alignItems: 'center',
-  },
-  documentModal: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    width: '90%',
-    maxWidth: 400,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  closeButtonText: {
-    fontSize: 16,
-    color: '#7A7A7A',
-  },
-  modalContent: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  modalDocumentIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F7F7F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalDocumentIconText: {
-    fontSize: 32,
-  },
-  modalDocumentName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4A4A4A',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  modalDetails: {
+    borderRadius: 10,
     width: '100%',
   },
-  modalDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+  selectBtnText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
-  modalDetailLabel: {
-    fontSize: 14,
-    color: '#7A7A7A',
-    fontWeight: '500',
+  formatHint: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#999',
+    marginTop: 10,
   },
-  modalDetailValue: {
-    fontSize: 14,
-    color: '#4A4A4A',
-    fontWeight: '500',
-    flex: 1,
-    textAlign: 'right',
-  },
-  modalActions: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-  },
-  modalActionButton: {
-    backgroundColor: '#1155ccff',
+  selectedFileBox: {
+    marginBottom: 15,
+    backgroundColor: '#F5F5F5',
+    padding: 10,
     borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DDD',
   },
-  modalActionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
+  selectedLabel: {
+    fontSize: 10,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  selectedName: {
+    fontSize: 14,
+    color: '#333',
+  },
+  uploadBtn: {
+    backgroundColor: '#9DA7B5', // Gray color from mockup
+    paddingVertical: 14,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 50,
+  },
+  uploadBtnDisabled: {
+    opacity: 0.5,
+  },
+  uploadBtnText: {
+    color: '#1a2a5a', // Dark blue text on gray button
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
 });
 

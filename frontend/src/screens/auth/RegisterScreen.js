@@ -11,26 +11,22 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
 const RegisterScreen = ({ navigation }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
-  const { register, isLoading, error, clearError, login } = useAuth();
+  const { register, isLoading, clearError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleRegister = async () => {
-    // Validation
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
@@ -39,15 +35,15 @@ const RegisterScreen = ({ navigation }) => {
       return;
     }
 
-    if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters long');
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
 
-    const result = await register(email, password, phone);
+    const result = await register(email, password);
 
     if (result.success) {
-      // Navigation will be handled by AppNavigator based on user state
+      // Registration successful, navigation handled by AuthContext/AppNavigator
       clearError();
     } else {
       Alert.alert('Registration Failed', result.error);
@@ -55,41 +51,10 @@ const RegisterScreen = ({ navigation }) => {
   };
 
   const handleGoogleLogin = async () => {
-    try {
-      // Get Google OAuth URL from backend
-      const response = await axios.get('/auth/google');
-      const { authUrl } = response.data;
-
-      // Open Google OAuth in browser
-      const result = await WebBrowser.openAuthSessionAsync(
-        authUrl,
-        'exp://192.168.1.7:8081' // Your app's deep link
-      );
-
-      if (result.type === 'success') {
-        // Extract the auth code from the redirect URL
-        const url = new URL(result.url);
-        const code = url.searchParams.get('code');
-
-        if (code) {
-          // Send code to backend
-          const tokenResponse = await axios.post('/auth/google/callback', { code });
-
-          if (tokenResponse.data.token) {
-            await login(tokenResponse.data.user.email, 'google-auth', tokenResponse.data.user);
-          }
-        }
-      } else if (result.type === 'cancel') {
-        Alert.alert('Error', 'Google sign-in was cancelled');
-      }
-    } catch (error) {
-      console.error('Google login error:', error);
-      Alert.alert('Error', 'Failed to sign in with Google');
-    }
+    Alert.alert('Coming Soon', 'Google Sign-In is being configured. Please use email registration for now.');
   };
 
   const handleLinkedInLogin = () => {
-    // LinkedIn is stub only
     Alert.alert('Coming Soon', 'LinkedIn login will be available soon');
   };
 
@@ -102,12 +67,12 @@ const RegisterScreen = ({ navigation }) => {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join Found and find your perfect co-founder</Text>
+            <Text style={styles.subtitle}>Join Found to find your perfect co-founder</Text>
           </View>
 
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email *</Text>
+              <Text style={styles.label}>Email Address</Text>
               <TextInput
                 style={styles.input}
                 value={email}
@@ -121,19 +86,7 @@ const RegisterScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Phone (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="Enter your phone number"
-                placeholderTextColor={colors.secondaryText}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password *</Text>
+              <Text style={styles.label}>Password</Text>
               <View style={styles.passwordContainer}>
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
@@ -154,24 +107,16 @@ const RegisterScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password *</Text>
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm your password"
-                  placeholderTextColor={colors.secondaryText}
-                  secureTextEntry={!showConfirmPassword}
-                  autoCapitalize="none"
-                />
-                <TouchableOpacity
-                  style={styles.eyeButton}
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  <Text style={styles.eyeText}>{showConfirmPassword ? '👁️' : '👁️‍🗨️'}</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.label}>Confirm Password</Text>
+              <TextInput
+                style={styles.input}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Confirm your password"
+                placeholderTextColor={colors.secondaryText}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
             </View>
 
             <TouchableOpacity
@@ -180,7 +125,7 @@ const RegisterScreen = ({ navigation }) => {
               disabled={isLoading}
             >
               <Text style={styles.registerButtonText}>
-                {isLoading ? 'Creating Account...' : 'Create Account'}
+                {isLoading ? 'Creating Account...' : 'Sign Up'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -198,7 +143,7 @@ const RegisterScreen = ({ navigation }) => {
             >
               <View style={styles.socialButtonContent}>
                 <Text style={styles.googleIcon}>G</Text>
-                <Text style={styles.socialButtonText}>Continue with Google</Text>
+                <Text style={styles.socialButtonText}>Sign up with Google</Text>
               </View>
             </TouchableOpacity>
 
@@ -208,16 +153,24 @@ const RegisterScreen = ({ navigation }) => {
             >
               <View style={styles.socialButtonContent}>
                 <Text style={styles.linkedinIcon}>in</Text>
-                <Text style={styles.socialButtonText}>Continue with LinkedIn</Text>
+                <Text style={styles.socialButtonText}>Sign up with LinkedIn</Text>
               </View>
             </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account?</Text>
+            <Text style={styles.footerText}>Already have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.footerLink}>Sign In</Text>
+              <Text style={styles.signInText}>Sign In</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={styles.termsContainer}>
+            <Text style={styles.termsText}>
+              By signing up, you agree to our{' '}
+              <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+              <Text style={styles.termsLink}>Privacy Policy</Text>
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -235,28 +188,32 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 40,
+    marginTop: 20,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#4A4A4A',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     color: '#7A7A7A',
     textAlign: 'center',
+    paddingHorizontal: 20,
   },
   form: {
-    marginBottom: 30,
+    marginBottom: 32,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 16,
@@ -293,19 +250,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
+    marginTop: 12,
   },
   disabledButton: {
     opacity: 0.6,
   },
   registerButtonText: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
@@ -314,11 +272,11 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     paddingHorizontal: 16,
-    color: '#7A7A7A',
     fontSize: 14,
+    color: '#7A7A7A',
   },
   socialButtons: {
-    gap: 12,
+    marginBottom: 32,
   },
   socialButton: {
     backgroundColor: '#FFFFFF',
@@ -326,6 +284,7 @@ const styles = StyleSheet.create({
     borderColor: '#D4D4D4',
     borderRadius: 8,
     paddingVertical: 12,
+    marginBottom: 12,
   },
   socialButtonContent: {
     flexDirection: 'row',
@@ -333,16 +292,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   googleIcon: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4285F4',
+    width: 24,
+    height: 24,
+    backgroundColor: '#4285F4',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 24,
+    borderRadius: 4,
     marginRight: 12,
+    fontWeight: 'bold',
   },
   linkedinIcon: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0077B5',
+    width: 24,
+    height: 24,
+    backgroundColor: '#0077B5',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 24,
+    borderRadius: 4,
     marginRight: 12,
+    fontWeight: 'bold',
+    fontSize: 12,
   },
   socialButtonText: {
     fontSize: 16,
@@ -353,15 +323,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
+    marginBottom: 24,
   },
   footerText: {
     fontSize: 14,
     color: '#7A7A7A',
-    marginRight: 8,
   },
-  footerLink: {
+  signInText: {
     fontSize: 14,
+    color: '#1155ccff',
+    fontWeight: '600',
+  },
+  termsContainer: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  termsText: {
+    fontSize: 12,
+    color: '#7A7A7A',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  termsLink: {
     color: '#1155ccff',
     fontWeight: '500',
   },

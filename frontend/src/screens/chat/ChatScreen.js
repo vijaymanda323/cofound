@@ -1,260 +1,150 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
-  StyleSheet,
   FlatList,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
   Alert,
   Modal,
+  StatusBar,
 } from 'react-native';
-import axios from 'axios';
-import io from 'socket.io-client';
+import { Ionicons } from '@expo/vector-icons';
+import { socket } from '../../services/socket';
+import { useAuth } from '../../context/AuthContext';
+import API from '../../services/api';
+import { DUMMY_MATCHES } from '../../data/dummyData';
 
-const ChatScreen = ({ navigation, route }) => {
-  const { matchId, userName, userProfile } = route.params;
+const ChatScreen = ({ route, navigation }) => {
+  const { profile, matchId } = route.params;
+  const { user } = useAuth();
+  const [msg, setMsg] = useState('');
   const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isTyping, setIsTyping] = useState(false);
-  const [otherUserTyping, setOtherUserTyping] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  
+  const [loading, setLoading] = useState(true);
+  const [typing, setTyping] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef(null);
-  const socketRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
-    // Get current user info
-    const getCurrentUser = async () => {
-      try {
-        const response = await axios.get('/auth/me');
-        setCurrentUser(response.data.user);
-      } catch (error) {
-        console.error('Error getting current user:', error);
+    fetchMessages();
+    socket.emit('join_chat', matchId);
+
+    const handleMessage = (data) => {
+      setMessages(prev => [...prev, {
+        id: data._id,
+        content: data.content,
+        senderId: data.senderId,
+        timestamp: data.timestamp,
+        status: data.status,
+      }]);
+      markAsRead([data._id]);
+    };
+
+    const handleStatus = (data) => {
+      setMessages(prev => prev.map(m =>
+        m.id === data.messageId ? { ...m, status: data.status } : m
+      ));
+    };
+
+    const handleTyping = (data) => {
+      if (data.userId !== user._id) {
+        setTyping(data.typing);
       }
     };
-    
-    getCurrentUser();
-    loadMessages();
-    setupSocketConnection();
+
+    socket.on('receive_message', handleMessage);
+    socket.on('message_status', handleStatus);
+    socket.on('user_typing', handleTyping);
 
     return () => {
-      // Cleanup socket connection
-      if (socketRef.current) {
-        socketRef.current.emit('typing_stop', { matchId, userId: currentUser?.id });
-        socketRef.current.disconnect();
-      }
+      socket.off('receive_message', handleMessage);
+      socket.off('message_status', handleStatus);
+      socket.off('user_typing', handleTyping);
     };
   }, [matchId]);
 
-  useEffect(() => {
-    // Update header title when userName changes
-    navigation.setOptions({
-      headerTitle: userName || 'Chat',
-    });
-  }, [userName, navigation]);
+  const fetchMessages = async () => {
+    // If it's a dummy match, don't call the backend
+    if (typeof matchId === 'string' && matchId.startsWith('match')) {
+      const dummyMatch = DUMMY_MATCHES.find(m => m.matchId === matchId);
+      setMessages(dummyMatch?.messages || []);
+      setLoading(false);
+      return;
+    }
 
-  const setupSocketConnection = () => {
-    const socket = io('http://localhost:5000', {
-      auth: {
-        token: axios.defaults.headers.common.Authorization?.replace('Bearer ', '')
-      }
-    });
-
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      console.log('Connected to chat socket');
-      socket.emit('join_chat', matchId);
-    });
-
-    socket.on('receive_message', (messageData) => {
-      setMessages(prev => {
-        const newMessages = [...prev];
-        
-        // Remove date separator if it exists for today
-        const today = new Date().toDateString();
-        const existingTodayIndex = newMessages.findIndex(msg => 
-          msg.type === 'date_separator' && msg.date === 'Today'
-        );
-        
-        if (existingTodayIndex !== -1) {
-          newMessages.splice(existingTodayIndex, 1);
-        }
-        
-        // Add new message
-        newMessages.push({
-          id: messageData._id,
-          content: messageData.content,
-          senderId: messageData.senderId,
-          type: messageData.type || 'text',
-          timestamp: messageData.timestamp,
-          isOwn: messageData.senderId === currentUser?.id,
-        });
-        
-        // Add date separator if needed
-        const messageDate = new Date(messageData.timestamp);
-        const dateLabel = getDateLabel(messageDate);
-        
-        if (newMessages.length === 1 || 
-            newMessages[newMessages.length - 2]?.date !== dateLabel) {
-          newMessages.splice(newMessages.length - 1, 0, {
-            type: 'date_separator',
-            date: dateLabel,
-            timestamp: messageDate,
-          });
-        }
-        
-        return newMessages;
-      });
-
-      // Mark message as read if it's not from current user
-      if (messageData.senderId !== currentUser?.id) {
-        markMessageAsRead(messageData._id);
-      }
-
-      // Scroll to bottom
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    });
-
-    socket.on('message_status', (data) => {
-      setMessages(prev => prev.map(msg => 
-        msg.id === data.messageId 
-          ? { ...msg, status: data.status, readBy: data.readBy }
-          : msg
-      ));
-    });
-
-    socket.on('user_typing', (data) => {
-      if (data.userId !== currentUser?.id) {
-        setOtherUserTyping(data.typing);
-      }
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Disconnected from chat socket');
-    });
-  };
-
-  const loadMessages = async () => {
     try {
-      setIsLoading(true);
-      const response = await axios.get(`/chat/${matchId}`);
-      
-      if (response.data.messages) {
-        setMessages(response.data.messages);
-        
-        // Mark all messages as read
-        setTimeout(() => {
-          markAllMessagesAsRead();
-        }, 1000);
-      }
+      setLoading(true);
+      const res = await API.get(`/chat/${matchId}`);
+      setMessages(res.data.messages || []);
+
+      // Mark unread messages as read
+      const unreadIds = res.data.messages
+        .filter(m => !m.isOwn && m.status !== 'read')
+        .map(m => m.id);
+      if (unreadIds.length > 0) markAsRead(unreadIds);
     } catch (error) {
-      console.error('Error loading messages:', error);
-      Alert.alert('Error', 'Failed to load messages');
+      console.error('Error fetching messages:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const markMessageAsRead = async (messageId) => {
-    try {
-      await axios.put(`/chat/${matchId}/read`, { messageIds: [messageId] });
-    } catch (error) {
-      console.error('Error marking message as read:', error);
+  const markAsRead = async (messageIds) => {
+    if (typeof matchId === 'string' && matchId.startsWith('match')) {
+      return;
     }
-  };
 
-  const markAllMessagesAsRead = async () => {
     try {
-      await axios.put(`/chat/${matchId}/read`);
+      await API.put(`/chat/${matchId}/read`, { messageIds });
+      socket.emit('message_read', { matchId, userId: user._id });
     } catch (error) {
-      console.error('Error marking all messages as read:', error);
+      console.error('Error marking as read:', error);
     }
   };
 
   const sendMessage = async () => {
-    if (!inputText.trim() || !currentUser) return;
+    if (msg.trim() === '') return;
 
-    const messageContent = inputText.trim();
-    setInputText('');
+    const content = msg.trim();
+    setMsg('');
+
+    // If it's a dummy match, just add to local state
+    if (typeof matchId === 'string' && matchId.startsWith('match')) {
+      setMessages(prev => [...prev, {
+        id: `m-${Date.now()}`,
+        content,
+        senderId: 'current_user',
+        timestamp: new Date(),
+        status: 'sent',
+        isOwn: true
+      }]);
+      return;
+    }
 
     try {
-      const response = await axios.post(`/chat/${matchId}`, {
-        content: messageContent,
-        type: 'text',
-      });
-
-      // Message will be received through socket, so no need to add it manually
+      const res = await API.post(`/chat/${matchId}`, { content });
+      setMessages(prev => [...prev, {
+        id: res.data.data.id,
+        content: res.data.data.content,
+        senderId: user._id,
+        timestamp: res.data.data.timestamp,
+        status: 'sent',
+      }]);
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message');
-      setInputText(messageContent); // Restore message on error
     }
   };
 
-  const handleTypingStart = () => {
-    if (!isTyping && currentUser) {
-      setIsTyping(true);
-      socketRef.current?.emit('typing_start', { matchId, userId: currentUser.id });
-    }
-
-    // Clear existing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    // Set new timeout to stop typing indicator
-    typingTimeoutRef.current = setTimeout(() => {
-      handleTypingStop();
-    }, 1000);
-  };
-
-  const handleTypingStop = () => {
-    if (isTyping && currentUser) {
-      setIsTyping(false);
-      socketRef.current?.emit('typing_stop', { matchId, userId: currentUser.id });
-    }
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-  };
-
-  const handleRemoveConnection = () => {
-    Alert.alert(
-      'Remove Connection',
-      'Are you sure you want to remove this connection? This will delete all chat history.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await axios.delete(`/match/${matchId}`);
-              navigation.goBack();
-            } catch (error) {
-              console.error('Error removing connection:', error);
-              Alert.alert('Error', 'Failed to remove connection');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleBlockUser = () => {
+  const handleBlock = () => {
     Alert.alert(
       'Block User',
-      'Are you sure you want to block this user? You won\'t be able to match or chat with them again.',
+      'Are you sure you want to block this user? You will no longer be able to message each other.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -262,407 +152,390 @@ const ChatScreen = ({ navigation, route }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await axios.post(`/match/${matchId}/block`);
+              await API.post(`/match/${matchId}/block`, { reason: 'Blocked from chat' });
+              Alert.alert('Success', 'User blocked successfully');
               navigation.goBack();
             } catch (error) {
-              console.error('Error blocking user:', error);
               Alert.alert('Error', 'Failed to block user');
             }
-          },
-        },
+          }
+        }
       ]
     );
   };
 
-  const getDateLabel = (date) => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString();
-    }
-  };
-
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const handleUnmatch = () => {
+    Alert.alert(
+      'Remove Connection',
+      'Are you sure you want to remove this connection?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await API.delete(`/match/${matchId}`);
+              Alert.alert('Success', 'Connection removed');
+              navigation.navigate('Matches');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to remove connection');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const renderMessage = ({ item }) => {
     if (item.type === 'date_separator') {
       return (
         <View style={styles.dateSeparator}>
-          <Text style={styles.dateSeparatorText}>{item.date}</Text>
+          <Text style={styles.dateText}>{item.date}</Text>
         </View>
       );
     }
 
+    const isMe = item.senderId === user?._id || item.isOwn;
     return (
       <View style={[
-        styles.messageContainer,
-        item.isOwn ? styles.ownMessage : styles.otherMessage,
+        styles.messageBubble,
+        isMe ? styles.myMessage : styles.theirMessage
       ]}>
-        <View style={[
-          styles.messageBubble,
-          item.isOwn ? styles.ownBubble : styles.otherBubble,
+        <Text style={[
+          styles.messageText,
+          isMe ? styles.myMessageText : styles.theirMessageText
         ]}>
-          <Text style={[
-            styles.messageText,
-            item.isOwn ? styles.ownMessageText : styles.otherMessageText,
-          ]}>
-            {item.content}
+          {item.content}
+        </Text>
+        <View style={styles.messageFooter}>
+          <Text style={[styles.timeText, isMe && { color: '#E0E0E0' }]}>
+            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
-        </View>
-        
-        <View style={[
-          styles.messageInfo,
-          item.isOwn ? styles.ownMessageInfo : styles.otherMessageInfo,
-        ]}>
-          <Text style={styles.messageTime}>{formatTime(item.timestamp)}</Text>
-          
-          {item.isOwn && (
-            <Text style={styles.messageStatus}>
-              {item.status === 'read' ? '✔✔' : item.status === 'delivered' ? '✔✔' : '✔'}
-            </Text>
+          {isMe && (
+            <Ionicons
+              name={item.status === 'read' ? 'checkmark-done' : 'checkmark'}
+              size={14}
+              color={item.status === 'read' ? '#4CAF50' : '#E0E0E0'}
+              style={{ marginLeft: 4 }}
+            />
           )}
         </View>
       </View>
     );
   };
 
-  const renderTypingIndicator = () => {
-    if (!otherUserTyping) return null;
-
+  if (loading) {
     return (
-      <View style={styles.typingContainer}>
-        <View style={styles.typingBubble}>
-          <Text style={styles.typingText}>typing...</Text>
-        </View>
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#1155ccff" />
       </View>
     );
-  };
+  }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-        
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>{userName}</Text>
-          {userProfile?.location && (
-            <Text style={styles.headerLocation}>
-              📍 {userProfile.location.address}
-            </Text>
-          )}
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            style={styles.backButtonCircle}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={20} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerLogo}>FOUND.</Text>
+          <View style={{ width: 36 }} />
         </View>
-        
-        <TouchableOpacity 
-          style={styles.optionsButton} 
-          onPress={() => setShowOptions(true)}
-        >
-          <Text style={styles.optionsButtonText}>⋮</Text>
-        </TouchableOpacity>
+
+        <View style={styles.headerInfoRow}>
+          <View style={styles.avatarContainer}>
+            {profile.profilePhoto ? (
+              <Image source={{ uri: profile.profilePhoto }} style={styles.avatarImg} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={24} color="#666" />
+              </View>
+            )}
+            <View style={styles.onlineBadge}>
+              <Ionicons name="checkmark" size={8} color="#FFF" />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.infoBox}
+            onPress={() => navigation.navigate('ProfileDetail', { profile })}
+          >
+            <Text style={styles.infoBoxText} numberOfLines={1}>
+              {profile.fullName}, {profile.location?.address?.split(',')[0]} {profile.distance}km
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setShowMenu(true)}>
+            <Ionicons name="ellipsis-horizontal" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading messages...</Text>
-        </View>
-      ) : (
-        <>
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            renderItem={renderMessage}
-            keyExtractor={(item) => item.id || item.date}
-            contentContainerStyle={styles.messagesContainer}
-            onContentSizeChange={() => {
-              flatListRef.current?.scrollToEnd({ animated: false });
-            }}
-            ListFooterComponent={renderTypingIndicator}
-          />
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        keyExtractor={(item, idx) => item.id || `sep-${idx}`}
+        renderItem={renderMessage}
+        contentContainerStyle={styles.messageList}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+      />
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.textInput}
-              value={inputText}
-              onChangeText={setInputText}
-              onContentSizeChange={handleTypingStart}
-              onFocus={handleTypingStart}
-              onBlur={handleTypingStop}
-              placeholder="Type a message..."
-              placeholderTextColor="#7A7A7A"
-              multiline
-              maxLength={1000}
-            />
-            
-            <TouchableOpacity
-              style={[styles.sendButton, !inputText.trim() && styles.disabledSendButton]}
-              onPress={sendMessage}
-              disabled={!inputText.trim()}
-            >
-              <Text style={styles.sendButtonText}>Send</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
-
-      {/* Options Modal */}
-      <Modal
-        visible={showOptions}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOptions(false)}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.optionsModal}>
-            <TouchableOpacity
-              style={styles.optionItem}
-              onPress={handleRemoveConnection}
-            >
-              <Text style={styles.optionText}>Remove Connection</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            value={msg}
+            onChangeText={(text) => {
+              setMsg(text);
+              if (text.length > 0) socket.emit('typing_start', { matchId, userId: user._id });
+              else socket.emit('typing_stop', { matchId, userId: user._id });
+            }}
+            placeholder="Type a message..."
+            placeholderTextColor="#6F6F85"
+            multiline
+          />
+          <TouchableOpacity style={styles.sendBtn} onPress={sendMessage}>
+            <Ionicons name="send" size={24} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      <Modal
+        visible={showMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMenu(false)}
+        >
+          <View style={styles.menuContent}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); handleBlock(); }}>
+              <Text style={styles.menuItemTextDestructive}>Block User</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.optionItem}
-              onPress={handleBlockUser}
-            >
-              <Text style={[styles.optionText, styles.blockOption]}>Block User</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); handleUnmatch(); }}>
+              <Text style={styles.menuItemTextDestructive}>Remove Connection</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.cancelOption}
-              onPress={() => setShowOptions(false)}
-            >
-              <Text style={styles.cancelOptionText}>Cancel</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={() => setShowMenu(false)}>
+              <Text style={styles.menuItemText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: '#F7F7F7',
+    backgroundColor: '#F6F6F6',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#EFE9E1',
-    borderBottomWidth: 1,
-    borderBottomColor: '#D4D4D4',
-  },
-  backButton: {
-    padding: 8,
-    marginRight: 12,
-  },
-  backButtonText: {
-    fontSize: 20,
-    color: '#4A4A4A',
-    fontWeight: 'bold',
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-  },
-  headerLocation: {
-    fontSize: 12,
-    color: '#7A7A7A',
-    marginTop: 2,
-  },
-  optionsButton: {
-    padding: 8,
-  },
-  optionsButtonText: {
-    fontSize: 20,
-    color: '#4A4A4A',
-  },
-  loadingContainer: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#F6F6F6',
   },
-  loadingText: {
-    fontSize: 16,
-    color: '#7A7A7A',
+  header: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 15,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 10,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F2',
   },
-  messagesContainer: {
-    padding: 16,
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  backButtonCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerLogo: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+  },
+  headerInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  avatarContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#DDD',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineBadge: {
+    position: 'absolute',
+    right: -2,
+    top: -2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#1155ccff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  infoBox: {
+    flex: 1,
+    backgroundColor: '#F2F2F2',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 10,
+    marginHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#DDD',
+  },
+  infoBoxText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  messageList: {
+    padding: 15,
   },
   dateSeparator: {
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 20,
   },
-  dateSeparatorText: {
+  dateText: {
     fontSize: 12,
-    color: '#7A7A7A',
-    backgroundColor: '#EFE9E1',
-    paddingHorizontal: 12,
+    color: '#8E8E93',
+    backgroundColor: '#E5E5E5',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
-  },
-  messageContainer: {
-    marginVertical: 4,
-  },
-  ownMessage: {
-    alignItems: 'flex-end',
-  },
-  otherMessage: {
-    alignItems: 'flex-start',
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   messageBubble: {
-    maxWidth: '80%',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
     borderRadius: 20,
+    marginBottom: 8,
+    maxWidth: '80%',
   },
-  ownBubble: {
+  myMessage: {
+    alignSelf: 'flex-end',
     backgroundColor: '#1155ccff',
     borderBottomRightRadius: 4,
   },
-  otherBubble: {
+  theirMessage: {
+    alignSelf: 'flex-start',
     backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#D4D4D4',
+    borderColor: '#F0F1F6',
   },
   messageText: {
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 15,
   },
-  ownMessageText: {
+  myMessageText: {
     color: '#FFFFFF',
   },
-  otherMessageText: {
-    color: '#4A4A4A',
+  theirMessageText: {
+    color: '#1E1E2D',
   },
-  messageInfo: {
+  messageFooter: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     marginTop: 4,
-    paddingHorizontal: 4,
   },
-  ownMessageInfo: {
-    justifyContent: 'flex-end',
-  },
-  otherMessageInfo: {
-    justifyContent: 'flex-start',
-  },
-  messageTime: {
-    fontSize: 11,
-    color: '#7A7A7A',
-  },
-  messageStatus: {
-    fontSize: 11,
-    color: '#7A7A7A',
-    marginLeft: 4,
-  },
-  typingContainer: {
-    alignItems: 'flex-start',
-    marginHorizontal: 16,
-    marginBottom: 8,
-  },
-  typingBubble: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  typingText: {
-    fontSize: 14,
-    color: '#7A7A7A',
-    fontStyle: 'italic',
+  timeText: {
+    fontSize: 10,
+    color: '#8E8E93',
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#EFE9E1',
-    borderTopWidth: 1,
-    borderTopColor: '#D4D4D4',
-  },
-  textInput: {
-    flex: 1,
+    padding: 12,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F1F6',
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 25,
+    paddingHorizontal: 15,
     paddingVertical: 8,
-    marginRight: 12,
-    fontSize: 16,
-    color: '#4A4A4A',
+    marginRight: 10,
+    fontSize: 15,
     maxHeight: 100,
   },
-  sendButton: {
+  sendBtn: {
     backgroundColor: '#1155ccff',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  disabledSendButton: {
-    opacity: 0.5,
-  },
-  sendButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  optionsModal: {
+  menuContent: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingVertical: 20,
+    paddingBottom: 30,
+    paddingTop: 10,
   },
-  optionItem: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
-  },
-  optionText: {
-    fontSize: 16,
-    color: '#4A4A4A',
-  },
-  blockOption: {
-    color: '#ff4444',
-  },
-  cancelOption: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+  menuItem: {
+    paddingVertical: 15,
     alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F1F6',
   },
-  cancelOptionText: {
+  menuItemText: {
+    fontSize: 16,
+    color: '#000',
+  },
+  menuItemTextDestructive: {
     fontSize: 16,
     color: '#1155ccff',
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });
 

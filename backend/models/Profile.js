@@ -80,6 +80,14 @@ const profileSchema = new mongoose.Schema({
     max: 70,
     default: 0
   },
+  role: {
+    type: String,
+    enum: ['Co-Founder', 'Team Member', 'Investor', 'Mentor'],
+    default: 'Co-Founder'
+  },
+  equityRange: {
+    type: String
+  },
   bio: {
     type: String,
     maxlength: 200
@@ -137,7 +145,17 @@ const profileSchema = new mongoose.Schema({
     }],
     preferredIndustries: [{
       type: String
-    }]
+    }],
+    goalOverride: {
+      type: String,
+      enum: [
+        'I have a startup',
+        'I have startup ideas, looking for co-founder',
+        'I want to join someone\'s startup',
+        null
+      ],
+      default: null
+    }
   },
   isActive: {
     type: Boolean,
@@ -146,6 +164,10 @@ const profileSchema = new mongoose.Schema({
   lastSeen: {
     type: Date,
     default: Date.now
+  },
+  viewCount: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true
@@ -155,7 +177,6 @@ const profileSchema = new mongoose.Schema({
 profileSchema.index({ location: '2dsphere' });
 
 // Compound indexes for efficient filtering
-profileSchema.index({ userId: 1 });
 profileSchema.index({ 'location.coordinates': '2dsphere' });
 profileSchema.index({ skills: 1 });
 profileSchema.index({ industries: 1 });

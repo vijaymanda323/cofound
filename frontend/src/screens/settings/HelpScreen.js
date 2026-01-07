@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,267 +7,292 @@ import {
   ScrollView,
   Linking,
   Alert,
+  ActivityIndicator,
+  SafeAreaView,
+  StatusBar,
+  Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import API from '../../services/api';
 
 const HelpScreen = ({ navigation }) => {
+  const [supportInfo, setSupportInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchSupportInfo();
+  }, []);
+
+  const fetchSupportInfo = async () => {
+    try {
+      setLoading(true);
+      const res = await API.get('/settings/support');
+      setSupportInfo(res.data.supportInfo);
+    } catch (error) {
+      console.error('Error fetching support info:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleWhatsApp = () => {
-    Linking.openURL('https://wa.me/919876543210');
+    if (supportInfo?.whatsappQR) Linking.openURL(supportInfo.whatsappQR);
   };
 
   const handleEmail = () => {
-    Linking.openURL('mailto:support@found.com');
+    if (supportInfo?.supportEmail) Linking.openURL(`mailto:${supportInfo.supportEmail}`);
   };
-
-  const handleCall = () => {
-    Linking.openURL('tel:+919876543210');
-  };
-
-  const renderHelpSection = (title, items) => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {items.map((item, index) => (
-        <TouchableOpacity
-          key={index}
-          style={styles.helpItem}
-          onPress={item.onPress}
-        >
-          <View style={styles.helpItemLeft}>
-            <Text style={styles.helpIcon}>{item.icon}</Text>
-            <View style={styles.helpItemContent}>
-              <Text style={styles.helpItemTitle}>{item.title}</Text>
-              {item.subtitle && <Text style={styles.helpItemSubtitle}>{item.subtitle}</Text>}
-            </View>
-          </View>
-          <Text style={styles.arrow}>›</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const contactOptions = [
-    {
-      icon: '💬',
-      title: 'WhatsApp Support',
-      subtitle: 'Chat with our support team',
-      onPress: handleWhatsApp,
-    },
-    {
-      icon: '📧',
-      title: 'Email Support',
-      subtitle: 'support@found.com',
-      onPress: handleEmail,
-    },
-    {
-      icon: '📞',
-      title: 'Phone Support',
-      subtitle: '+91 98765 43210',
-      onPress: handleCall,
-    },
-  ];
-
-  const faqItems = [
-    {
-      icon: '❓',
-      title: 'How does matching work?',
-      subtitle: 'Learn about our matching algorithm',
-      onPress: () => Alert.alert('Matching', 'When both users tap Yes on each other\'s profiles, a match is created and you can start chatting.'),
-    },
-    {
-      icon: '🔒',
-      title: 'Is my data secure?',
-      subtitle: 'Privacy and security information',
-      onPress: () => Alert.alert('Security', 'We use industry-standard encryption and security practices to protect your data.'),
-    },
-    {
-      icon: '✅',
-      title: 'How to get verified?',
-      subtitle: 'Verification process explained',
-      onPress: () => Alert.alert('Verification', 'Upload government ID or business documents to get your profile verified.'),
-    },
-    {
-      icon: '🚫',
-      title: 'How to block someone?',
-      subtitle: 'Blocking and reporting users',
-      onPress: () => Alert.alert('Blocking', 'Go to chat options and select "Block User" to prevent further contact.'),
-    },
-  ];
-
-  const resources = [
-    {
-      icon: '📖',
-      title: 'User Guide',
-      subtitle: 'Complete guide to using Found',
-      onPress: () => Alert.alert('User Guide', 'Comprehensive user guide coming soon!'),
-    },
-    {
-      icon: '🎥',
-      title: 'Video Tutorials',
-      subtitle: 'Watch and learn',
-      onPress: () => Alert.alert('Tutorials', 'Video tutorials coming soon!'),
-    },
-    {
-      icon: '📰',
-      title: 'Blog & Tips',
-      subtitle: 'Startup advice and insights',
-      onPress: () => Alert.alert('Blog', 'Blog and tips coming soon!'),
-    },
-  ];
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Contact Support */}
-      {renderHelpSection('Contact Support', contactOptions)}
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" />
 
-      {/* Frequently Asked Questions */}
-      {renderHelpSection('Frequently Asked Questions', faqItems)}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={24} color="#000" />
+        </TouchableOpacity>
+        <Text style={styles.headerLogo}>FOUND.</Text>
+        <TouchableOpacity style={styles.feedbackBtn} onPress={() => navigation.navigate('Feedback')}>
+          <Ionicons name="chatbubble-outline" size={24} color="#000" />
+        </TouchableOpacity>
+      </View>
 
-      {/* Resources */}
-      {renderHelpSection('Resources', resources)}
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#1155ccff" />
+          </View>
+        ) : (
+          <View style={styles.content}>
+            <Text style={styles.pageTitle}>Help & Support</Text>
+            <Text style={styles.pageSub}>We're here to help you build your dream startup team.</Text>
 
-      {/* About */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About Found</Text>
-        <View style={styles.aboutContent}>
-          <Text style={styles.aboutText}>
-            Found is the premier platform for connecting entrepreneurs with their ideal co-founders. 
-            Our mission is to help build successful startups by matching compatible founders based on 
-            skills, goals, and vision.
-          </Text>
-          
-          <View style={styles.aboutStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>10,000+</Text>
-              <Text style={styles.statLabel}>Active Users</Text>
+            <Text style={styles.sectionTitle}>Contact Us</Text>
+            <View style={styles.contactRow}>
+              <TouchableOpacity style={styles.contactCard} onPress={handleWhatsApp}>
+                <View style={[styles.contactIconBox, { backgroundColor: '#E8F5E9' }]}>
+                  <Ionicons name="logo-whatsapp" size={30} color="#2ECC71" />
+                </View>
+                <Text style={styles.contactLabel}>WhatsApp</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.contactCard} onPress={handleEmail}>
+                <View style={[styles.contactIconBox, { backgroundColor: '#E3F2FD' }]}>
+                  <Ionicons name="mail" size={30} color="#1155ccff" />
+                </View>
+                <Text style={styles.contactLabel}>Email Us</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>5,000+</Text>
-              <Text style={styles.statLabel}>Matches Made</Text>
+
+            <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
+            <View style={styles.card}>
+              {supportInfo?.faqs.map((faq, index) => (
+                <View key={index}>
+                  <TouchableOpacity
+                    style={styles.faqItem}
+                    onPress={() => Alert.alert(faq.question, faq.answer)}
+                  >
+                    <Text style={styles.faqQuestion}>{faq.question}</Text>
+                    <Ionicons name="chevron-forward" size={18} color="#CCC" />
+                  </TouchableOpacity>
+                  {index < supportInfo.faqs.length - 1 && <View style={styles.divider} />}
+                </View>
+              ))}
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>1,000+</Text>
-              <Text style={styles.statLabel}>Startups Founded</Text>
+
+            <Text style={styles.sectionTitle}>Help Articles</Text>
+            {supportInfo?.helpArticles.map((article, idx) => (
+              <TouchableOpacity
+                key={article.id || idx}
+                style={styles.articleCard}
+                onPress={() => Alert.alert(article.title, article.content)}
+              >
+                <View style={styles.articleIconBox}>
+                  <Ionicons name="book-outline" size={20} color="#666" />
+                </View>
+                <View style={styles.articleContent}>
+                  <Text style={styles.articleTitle}>{article.title}</Text>
+                  <Text style={styles.articleSub} numberOfLines={1}>{article.content}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#CCC" />
+              </TouchableOpacity>
+            ))}
+
+            <View style={styles.footer}>
+              <Text style={styles.footerLogo}>FOUND.</Text>
+              <Text style={styles.footerTag}>v1.0.0 • Professional Edition</Text>
             </View>
           </View>
-        </View>
-      </View>
-
-      {/* App Info */}
-      <View style={styles.appInfo}>
-        <Text style={styles.appName}>Found</Text>
-        <Text style={styles.appVersion}>Version 1.0.0</Text>
-        <Text style={styles.appTagline}>Find the right co-founder</Text>
-        <Text style={styles.appCopyright}>© 2024 Found. All rights reserved.</Text>
-      </View>
-    </ScrollView>
+        )}
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: '#F7F7F7',
-  },
-  section: {
     backgroundColor: '#FFFFFF',
-    margin: 16,
-    borderRadius: 12,
-    padding: 4,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 8,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  helpItem: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 15,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 15 : 15,
+    paddingBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    borderBottomColor: '#F2F2F2',
   },
-  helpItemLeft: {
-    flexDirection: 'row',
+  headerLogo: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedbackBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  container: {
     flex: 1,
   },
-  helpIcon: {
+  content: {
+    padding: 20,
+  },
+  pageTitle: {
     fontSize: 24,
-    marginRight: 16,
-  },
-  helpItemContent: {
-    flex: 1,
-  },
-  helpItemTitle: {
-    fontSize: 16,
-    color: '#4A4A4A',
-    marginBottom: 2,
-  },
-  helpItemSubtitle: {
-    fontSize: 14,
-    color: '#7A7A7A',
-  },
-  arrow: {
-    fontSize: 20,
-    color: '#7A7A7A',
-  },
-  aboutContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  aboutText: {
-    fontSize: 16,
-    color: '#4A4A4A',
-    lineHeight: 24,
-    marginBottom: 20,
-  },
-  aboutStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1155ccff',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#7A7A7A',
-    textAlign: 'center',
-  },
-  appInfo: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  appName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 4,
-  },
-  appVersion: {
-    fontSize: 14,
-    color: '#7A7A7A',
-    marginBottom: 4,
-  },
-  appTagline: {
-    fontSize: 14,
-    color: '#7A7A7A',
-    fontStyle: 'italic',
+    fontWeight: '800',
+    color: '#000',
     marginBottom: 8,
   },
-  appCopyright: {
+  pageSub: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 25,
+  },
+  loadingBox: {
+    paddingTop: 100,
+    alignItems: 'center',
+  },
+  sectionTitle: {
     fontSize: 12,
-    color: '#7A7A7A',
+    fontWeight: '900',
+    color: '#999',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 15,
+    marginTop: 15,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    gap: 15,
+    marginBottom: 30,
+  },
+  contactCard: {
+    flex: 1,
+    backgroundColor: '#FDFDFD',
+    borderRadius: 24,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  contactIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  contactLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  card: {
+    backgroundColor: '#FDFDFD',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    marginBottom: 30,
+  },
+  faqItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 18,
+  },
+  faqQuestion: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+    marginRight: 10,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F2F2F2',
+  },
+  articleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FDFDFD',
+    padding: 15,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    marginBottom: 12,
+  },
+  articleIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  articleContent: {
+    flex: 1,
+  },
+  articleTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  articleSub: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 2,
+  },
+  footer: {
+    marginTop: 40,
+    alignItems: 'center',
+  },
+  footerLogo: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#DDD',
+    letterSpacing: 2,
+  },
+  footerTag: {
+    fontSize: 11,
+    color: '#BBB',
+    marginTop: 5,
+    fontWeight: '600',
   },
 });
 

@@ -49,6 +49,11 @@ const userSchema = new mongoose.Schema({
   registrationStep: {
     type: Number,
     default: 0
+  },
+  plan: {
+    type: String,
+    enum: ['Starter', 'Pro', 'Founders Club'],
+    default: 'Starter'
   }
 }, {
   timestamps: true

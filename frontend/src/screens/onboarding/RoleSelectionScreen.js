@@ -13,21 +13,22 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { useAuth } from '../../context/AuthContext';
+import API from '../../services/api';
 import RoleCard from '../../components/onboarding/RoleCard';
 import MultiSelectDropdown from '../../components/onboarding/MultiSelectDropdown';
 import ProgressBar from '../../components/onboarding/ProgressBar';
 
 const RoleSelectionScreen = ({ navigation }) => {
   const { colors } = useTheme();
-  const { 
-    goal, 
-    role, 
-    equityRange, 
-    skills, 
-    industries, 
-    experience, 
-    bio, 
-    education, 
+  const {
+    goal,
+    role,
+    equityRange,
+    skills,
+    industries,
+    experience,
+    bio,
+    education,
     linkedinProfile,
     setRole,
     setSkills,
@@ -41,7 +42,7 @@ const RoleSelectionScreen = ({ navigation }) => {
     isLoading,
     error
   } = useOnboarding();
-  
+
   const { updateRegistrationStep } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -108,11 +109,44 @@ const RoleSelectionScreen = ({ navigation }) => {
 
     try {
       setIsSubmitting(true);
-      
+
+      // Save profile data to backend
+      const profileData = {
+        goal: goal === 'I have startup ideas, looking for a co-founder'
+          ? 'I have startup ideas, looking for co-founder'
+          : goal,
+        role: role,
+        equityRange: equityRange,
+        skills: skills.map(skill => ({
+          name: skill,
+          level: 5,
+          isCustom: true
+        })),
+        industries: industries,
+        experience: experience ? parseInt(experience) : 0,
+        bio: bio,
+        education: {
+          college: education
+        },
+        linkedinUrl: linkedinProfile,
+        // Since we don't have name/location here, we provide defaults if missing
+        fullName: user?.fullName || 'User',
+        location: {
+          type: 'Point',
+          coordinates: [0, 0],
+          address: 'Default Location'
+        },
+        mission: bio || 'Entrepreneur'
+      };
+
+      console.log('Saving onboarding profile to backend:', profileData);
+      const response = await API.post('/profile', profileData);
+      console.log('Profile saved successfully:', response.data);
+
       // Update registration step to show onboarding is complete
       await updateRegistrationStep(2);
-      
-      // Navigate to main app or next step
+
+      // Navigate to main app
       Alert.alert(
         'Success!',
         'Onboarding completed successfully!',
@@ -120,7 +154,6 @@ const RoleSelectionScreen = ({ navigation }) => {
           {
             text: 'Continue',
             onPress: () => {
-              // Navigate to main app or profile completion
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'MainTabs' }],
@@ -131,17 +164,28 @@ const RoleSelectionScreen = ({ navigation }) => {
       );
     } catch (error) {
       console.error('Error completing onboarding:', error);
-      Alert.alert('Error', 'Failed to complete onboarding. Please try again.');
+      const errorMessage = error.response?.data?.message || 'Failed to complete onboarding. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleSkip = () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-    });
+  const handleSkip = async () => {
+    try {
+      // Still try to update step to 2 so they can enter the app
+      await updateRegistrationStep(2);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
+    } catch (error) {
+      console.error('Error skipping onboarding:', error);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
+    }
   };
 
   const handleBack = () => {
@@ -151,7 +195,7 @@ const RoleSelectionScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.appBackground }]}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.appBackground} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack}>
@@ -162,7 +206,7 @@ const RoleSelectionScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -313,8 +357,8 @@ const RoleSelectionScreen = ({ navigation }) => {
           style={[
             styles.completeButton,
             {
-              backgroundColor: role && skills.length > 0 && industries.length > 0 
-                ? colors.primary 
+              backgroundColor: role && skills.length > 0 && industries.length > 0
+                ? colors.primary
                 : colors.border,
               opacity: role && skills.length > 0 && industries.length > 0 ? 1 : 0.6,
             }

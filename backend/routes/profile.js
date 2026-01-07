@@ -18,6 +18,8 @@ router.post('/', auth, [
   body('skills').optional().isArray(),
   body('industries').optional().isArray(),
   body('experience').optional().isInt({ min: 0, max: 70 }),
+  body('role').optional().isIn(['Co-Founder', 'Team Member', 'Investor', 'Mentor']),
+  body('equityRange').optional().isString(),
   body('bio').optional().isLength({ max: 200 })
 ], async (req, res) => {
   try {

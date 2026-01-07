@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import axios from 'axios';
+import API from '../services/api';
+import { connectSocket, disconnectSocket } from '../services/socket';
 
 // Auth Context
 const AuthContext = createContext();
@@ -49,14 +50,18 @@ const initialState = {
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Set auth token in axios headers
-  const setAuthToken = (token) => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  // Manage socket connection
+  useEffect(() => {
+    if (state.isAuthenticated && state.user && state.user.registrationStep === 'complete') {
+      connectSocket(state.user._id);
     } else {
-      delete axios.defaults.headers.common['Authorization'];
+      disconnectSocket();
     }
-  };
+
+    return () => {
+      disconnectSocket();
+    };
+  }, [state.isAuthenticated, state.user]);
 
   // Load token and user on app start
   useEffect(() => {
@@ -67,11 +72,10 @@ export const AuthProvider = ({ children }) => {
         const token = await SecureStore.getItemAsync('authToken');
 
         if (token) {
-          setAuthToken(token);
           dispatch({ type: 'SET_TOKEN', payload: token });
 
           // Verify token and get user data with timeout
-          const response = await axios.get('/auth/me', { timeout: 5000 });
+          const response = await API.get('/auth/me', { timeout: 5000 });
 
           if (response.data.user) {
             dispatch({ type: 'SET_USER', payload: response.data.user });
@@ -99,7 +103,7 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'CLEAR_ERROR' });
 
-      const response = await axios.post('/auth/login', {
+      const response = await API.post('/auth/login', {
         identifier,
         password,
       });
@@ -132,7 +136,7 @@ export const AuthProvider = ({ children }) => {
 
       console.log('Attempting registration for:', email);
 
-      const response = await axios.post('/auth/register', {
+      const response = await API.post('/auth/register', {
         email,
         password,
         ...(phone && phone.trim() ? { phone } : {}),
@@ -169,7 +173,7 @@ export const AuthProvider = ({ children }) => {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'CLEAR_ERROR' });
 
-      const response = await axios.post('/auth/verify-otp', {
+      const response = await API.post('/auth/verify-otp', {
         identifier,
         code,
         purpose,
@@ -193,7 +197,7 @@ export const AuthProvider = ({ children }) => {
     try {
       dispatch({ type: 'CLEAR_ERROR' });
 
-      await axios.post('/auth/resend-otp', {
+      await API.post('/auth/resend-otp', {
         identifier,
         purpose,
       });
@@ -209,7 +213,7 @@ export const AuthProvider = ({ children }) => {
   // Update registration step
   const updateRegistrationStep = async (step) => {
     try {
-      await axios.put('/auth/registration-step', { step });
+      await API.put('/auth/registration-step', { step });
 
       // Update local user state
       if (state.user) {
@@ -232,9 +236,6 @@ export const AuthProvider = ({ children }) => {
     try {
       // Remove token from secure storage
       await SecureStore.deleteItemAsync('authToken');
-
-      // Clear axios headers
-      setAuthToken(null);
 
       // Clear state
       dispatch({ type: 'LOGOUT' });
@@ -262,7 +263,6 @@ export const AuthProvider = ({ children }) => {
     updateRegistrationStep,
     logout,
     clearError,
-    setAuthToken,
   };
 
   return (

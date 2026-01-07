@@ -6,7 +6,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import axios from 'axios';
+import { Ionicons } from '@expo/vector-icons';
 
 // Import screens
 import SplashScreen from './src/screens/SplashScreen';
@@ -17,16 +17,21 @@ import OnboardingScreen from './src/screens/auth/OnboardingScreen';
 import ProfileCreationScreen from './src/screens/profile/ProfileCreationScreen';
 import DiscoveryScreen from './src/screens/discovery/DiscoveryScreen';
 import MatchesScreen from './src/screens/matches/MatchesScreen';
+import ChatListScreen from './src/screens/chat/ChatListScreen';
 import ChatScreen from './src/screens/chat/ChatScreen';
+import ProfileDetailScreen from './src/screens/discovery/ProfileDetailScreen';
 import SettingsScreen from './src/screens/settings/SettingsScreen';
 import DocumentsScreen from './src/screens/settings/DocumentsScreen';
 import VerificationScreen from './src/screens/settings/VerificationScreen';
 import DiscoverSettingsScreen from './src/screens/settings/DiscoverSettingsScreen';
 import HelpScreen from './src/screens/settings/HelpScreen';
 import FeedbackScreen from './src/screens/settings/FeedbackScreen';
+import ProfileEditScreen from './src/screens/settings/ProfileEditScreen';
+import SubscriptionScreen from './src/screens/settings/SubscriptionScreen';
 // New onboarding screens
 import GoalSelectionScreen from './src/screens/onboarding/GoalSelectionScreen';
 import RoleSelectionScreen from './src/screens/onboarding/RoleSelectionScreen';
+import FiltersScreen from './src/screens/discovery/FiltersScreen';
 
 // Import context
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
@@ -35,9 +40,6 @@ import { OnboardingProvider } from './src/context/OnboardingContext';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
-
-// API Configuration
-axios.defaults.baseURL = 'http://192.168.1.7:8080/api';
 
 // Auth Stack Navigator
 const AuthStack = () => (
@@ -59,25 +61,58 @@ const MainTabs = () => {
 
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
+
+          if (route.name === 'Discovery') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Matches') {
+            iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
+          } else if (route.name === 'Chats') {
+            iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+          } else if (route.name === 'Settings') {
+            iconName = focused ? 'person' : 'person-outline';
+          }
+
+          return (
+            <View style={focused && route.name === 'Discovery' ? styles.activeIconBg : null}>
+              <Ionicons name={iconName} size={size} color={color} />
+            </View>
+          );
+        },
         tabBarStyle: {
-          backgroundColor: '#EFE9E1',
-          borderTopColor: '#D4D4D4',
-          height: 60,
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#EEEEEE',
+          height: 80,
+          paddingBottom: 12,
+          paddingTop: 8,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
         },
-        tabBarActiveTintColor: '#1155ccff',
-        tabBarInactiveTintColor: '#7A7A7A',
+        tabBarActiveTintColor: '#1155cc',
+        tabBarInactiveTintColor: '#8E8E93',
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '700',
+          textTransform: 'uppercase',
+          marginTop: -4,
+        },
         headerStyle: {
-          backgroundColor: '#F7F7F7',
+          backgroundColor: '#FFFFFF',
         },
-        headerTintColor: '#4A4A4A',
-      }}
+        headerTintColor: '#000000',
+      })}
     >
       <Tab.Screen
         name="Discovery"
         component={DiscoveryScreen}
         options={{
-          tabBarLabel: 'Discover',
+          tabBarLabel: 'DISCOVER',
           headerShown: false,
         }}
       />
@@ -85,16 +120,27 @@ const MainTabs = () => {
         name="Matches"
         component={MatchesScreen}
         options={{
-          tabBarLabel: 'Matches',
+          tabBarLabel: 'MATCHES',
           headerTitle: 'Your Matches',
+          headerTitleAlign: 'center',
+        }}
+      />
+      <Tab.Screen
+        name="Chats"
+        component={ChatListScreen}
+        options={{
+          tabBarLabel: 'CHAT',
+          headerTitle: 'Chats',
+          headerTitleAlign: 'center',
         }}
       />
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
-          tabBarLabel: 'Settings',
-          headerTitle: 'Settings',
+          tabBarLabel: 'PROFILE',
+          headerTitle: 'MY PROFILE',
+          headerShown: false,
         }}
       />
     </Tab.Navigator>
@@ -108,35 +154,52 @@ const MainStack = () => (
     <Stack.Screen
       name="Chat"
       component={ChatScreen}
-      options={({ route }) => ({
-        headerTitle: route.params.userName || 'Chat',
-        headerStyle: { backgroundColor: '#F7F7F7' },
-      })}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="ProfileDetail"
+      component={ProfileDetailScreen}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Documents"
       component={DocumentsScreen}
-      options={{ headerTitle: 'My Documents' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Verification"
       component={VerificationScreen}
-      options={{ headerTitle: 'Verification Status' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="DiscoverSettings"
       component={DiscoverSettingsScreen}
-      options={{ headerTitle: 'Discover Settings' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Help"
       component={HelpScreen}
-      options={{ headerTitle: 'Help & Support' }}
+      options={{ headerShown: false }}
     />
     <Stack.Screen
       name="Feedback"
       component={FeedbackScreen}
-      options={{ headerTitle: 'Send Feedback' }}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="Filters"
+      component={FiltersScreen}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="ProfileEdit"
+      component={ProfileEditScreen}
+      options={{ headerShown: false }}
+    />
+    <Stack.Screen
+      name="Subscription"
+      component={SubscriptionScreen}
+      options={{ headerShown: false }}
     />
   </Stack.Navigator>
 );
@@ -144,6 +207,7 @@ const MainStack = () => (
 // Root Navigator Component
 const AppNavigator = () => {
   const { user, isLoading } = useContext(AuthContext);
+
 
   if (isLoading) {
     return (
@@ -223,5 +287,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#4A4A4A',
     fontFamily: 'System',
+  },
+  activeIconBg: {
+    backgroundColor: 'rgba(110, 123, 255, 0.1)',
+    padding: 8,
+    borderRadius: 12,
   },
 });

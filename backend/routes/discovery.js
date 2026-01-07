@@ -17,7 +17,7 @@ router.get('/next', auth, async (req, res) => {
     }
 
     const currentUserId = req.user.id;
-    
+
     // Get current user's profile and settings
     const currentUserProfile = await Profile.findOne({ userId: currentUserId });
     if (!currentUserProfile) {
@@ -27,15 +27,15 @@ router.get('/next', auth, async (req, res) => {
     // Get users already liked/blocked by current user
     const likedUsers = await Like.find({ fromUserId: currentUserId })
       .distinct('toUserId');
-    
-    const blockedUsers = await Block.find({ 
-      userId: currentUserId, 
-      isActive: true 
+
+    const blockedUsers = await Block.find({
+      userId: currentUserId,
+      isActive: true
     }).distinct('blockedUserId');
-    
-    const usersWhoBlockedMe = await Block.find({ 
-      blockedUserId: currentUserId, 
-      isActive: true 
+
+    const usersWhoBlockedMe = await Block.find({
+      blockedUserId: currentUserId,
+      isActive: true
     }).distinct('userId');
 
     // Get users already matched with current user
@@ -46,10 +46,10 @@ router.get('/next', auth, async (req, res) => {
       ],
       isActive: true
     }).select('user1Id user2Id');
-    
-    const matchedUserIds = matchedUsers.map(match => 
-      match.user1Id.toString() === currentUserId.toString() 
-        ? match.user2Id 
+
+    const matchedUserIds = matchedUsers.map(match =>
+      match.user1Id.toString() === currentUserId.toString()
+        ? match.user2Id
         : match.user1Id
     );
 
@@ -80,7 +80,7 @@ router.get('/next', auth, async (req, res) => {
       const minBirthYear = currentYear - currentUserProfile.discoverSettings.maxAge;
       discoveryQuery.yearOfBirth = { $gte: minBirthYear };
     }
-    
+
     if (currentUserProfile.discoverSettings.maxAge) {
       const maxBirthYear = currentYear - currentUserProfile.discoverSettings.minAge;
       discoveryQuery.yearOfBirth = discoveryQuery.yearOfBirth || {};
@@ -88,8 +88,12 @@ router.get('/next', auth, async (req, res) => {
     }
 
     // Add goal filter if specified
-    if (currentUserProfile.discoverSettings.preferredGoals?.length > 0) {
-      discoveryQuery.goal = { $in: currentUserProfile.discoverSettings.preferredGoals };
+    const preferredGoals = currentUserProfile.discoverSettings.goalOverride
+      ? [currentUserProfile.discoverSettings.goalOverride]
+      : currentUserProfile.discoverSettings.preferredGoals;
+
+    if (preferredGoals?.length > 0) {
+      discoveryQuery.goal = { $in: preferredGoals };
     }
 
     // Add skills filter if specified
@@ -107,10 +111,16 @@ router.get('/next', auth, async (req, res) => {
       .populate('userId', 'email')
       .sort({ 'location.coordinates': 1 });
 
+    if (nextProfile) {
+      // Increment viewCount
+      nextProfile.viewCount = (nextProfile.viewCount || 0) + 1;
+      await nextProfile.save();
+    }
+
     if (!nextProfile) {
-      return res.json({ 
+      return res.json({
         message: 'No more profiles found. Try expanding your filters.',
-        profile: null 
+        profile: null
       });
     }
 
@@ -191,18 +201,41 @@ router.post('/action', auth, [
 
         await match.save();
 
-        // Get both profiles for response
-        const [profile1, profile2] = await Promise.all([
-          Profile.findOne({ userId: fromUserId }).populate('userId', 'email'),
-          Profile.findOne({ userId: toUserId }).populate('userId', 'email')
-        ]);
+        // Emit match event via Socket.IO
+        const io = req.app.get('io');
+        const connectedUsers = req.app.get('connectedUsers');
+
+        // Fetch current user profile for socket data
+        const currentUserProfile = await Profile.findOne({ userId: fromUserId });
+
+        if (io) {
+          // Notify both users
+          const user1SocketId = connectedUsers.get(fromUserId.toString());
+          const user2SocketId = connectedUsers.get(toUserId.toString());
+
+          if (user1SocketId) {
+            io.to(user1SocketId).emit('new_match', {
+              id: match._id,
+              user: targetProfile,
+              matchedAt: match.matchedAt
+            });
+          }
+
+          if (user2SocketId) {
+            io.to(user2SocketId).emit('new_match', {
+              id: match._id,
+              user: currentUserProfile,
+              matchedAt: match.matchedAt
+            });
+          }
+        }
 
         return res.json({
           message: 'Connection established!',
           match: true,
           matchData: {
             id: match._id,
-            user: profile2,
+            user: targetProfile,
             matchedAt: match.matchedAt
           }
         });
@@ -261,15 +294,15 @@ function calculateDistance(coords1, coords2) {
   const lat1 = toRad(coords1[1]);
   const lat2 = toRad(coords2[1]);
 
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
   return R * c;
 }
 
 function toRad(deg) {
-  return deg * (Math.PI/180);
+  return deg * (Math.PI / 180);
 }
 
 module.exports = router;

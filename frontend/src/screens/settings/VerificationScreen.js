@@ -7,9 +7,14 @@ import {
   ScrollView,
   Alert,
   RefreshControl,
+  SafeAreaView,
+  StatusBar,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import axios from 'axios';
+import API from '../../services/api';
 
 const VerificationScreen = ({ navigation }) => {
   const [verificationStatus, setVerificationStatus] = useState(null);
@@ -24,8 +29,7 @@ const VerificationScreen = ({ navigation }) => {
   const loadVerificationStatus = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get('/settings/verification');
-      
+      const response = await API.get('/settings/verification');
       if (response.data.verificationStatus) {
         setVerificationStatus(response.data.verificationStatus);
       }
@@ -46,12 +50,7 @@ const VerificationScreen = ({ navigation }) => {
   const handleUploadDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'image/jpeg',
-          'image/jpg',
-          'image/png',
-        ],
+        type: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'],
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -68,7 +67,6 @@ const VerificationScreen = ({ navigation }) => {
   const uploadVerificationDocument = async (asset) => {
     try {
       setUploading(true);
-
       const formData = new FormData();
       formData.append('document', {
         uri: asset.uri,
@@ -77,10 +75,8 @@ const VerificationScreen = ({ navigation }) => {
       });
       formData.append('documentType', 'verification');
 
-      const response = await axios.post('/documents/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const response = await API.post('/documents/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       if (response.data.document) {
@@ -96,365 +92,295 @@ const VerificationScreen = ({ navigation }) => {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusInfo = (status) => {
     switch (status) {
       case 'verified':
-        return '#00b000';
+        return { color: '#2ECC71', icon: 'checkmark-circle', label: 'Verified', bg: '#E8F5E9' };
       case 'pending':
-        return '#ffaa00';
+        return { color: '#F39C12', icon: 'time', label: 'Pending Review', bg: '#FFF3E0' };
       case 'rejected':
-        return '#ff4444';
+        return { color: '#E74C3C', icon: 'close-circle', label: 'Rejected', bg: '#FDEDEC' };
       default:
-        return '#7A7A7A';
+        return { color: '#999', icon: 'document-text', label: 'Not Verified', bg: '#F9F9F9' };
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'verified':
-        return '✅';
-      case 'pending':
-        return '⏳';
-      case 'rejected':
-        return '❌';
-      default:
-        return '📄';
-    }
-  };
-
-  const renderVerificationStatus = () => {
-    if (!verificationStatus) return null;
-
-    const { isVerified, verificationDocuments, overallStatus } = verificationStatus;
+  const renderStatusCard = () => {
+    const status = verificationStatus?.overallStatus || 'not_verified';
+    const info = getStatusInfo(status);
 
     return (
-      <View style={styles.statusContainer}>
-        <View style={[
-          styles.statusCard,
-          { borderColor: getStatusColor(overallStatus) }
-        ]}>
-          <View style={styles.statusHeader}>
-            <Text style={styles.statusIcon}>
-              {getStatusIcon(overallStatus)}
-            </Text>
-            <Text style={[
-              styles.statusText,
-              { color: getStatusColor(overallStatus) }
-            ]}>
-              {overallStatus === 'verified' && 'Verified'}
-              {overallStatus === 'not_verified' && 'Not Verified'}
-              {overallStatus === 'pending' && 'Pending Review'}
-            </Text>
-          </View>
-
-          <Text style={styles.statusDescription}>
-            {overallStatus === 'verified' && 
-              'Your profile has been verified. You now have a verified badge on your profile.'
-            }
-            {overallStatus === 'not_verified' && 
-              'Upload verification documents to get your profile verified and build trust with potential co-founders.'
-            }
-            {overallStatus === 'pending' && 
-              'Your verification documents are under review. This typically takes 1-2 business days.'
-            }
-          </Text>
+      <View style={[styles.statusCard, { backgroundColor: info.bg, borderColor: info.color }]}>
+        <View style={styles.statusHeaderRow}>
+          <Ionicons name={info.icon} size={28} color={info.color} />
+          <Text style={[styles.statusLabel, { color: info.color }]}>{info.label}</Text>
         </View>
-      </View>
-    );
-  };
-
-  const renderVerificationDocuments = () => {
-    if (!verificationStatus?.verificationDocuments?.length) {
-      return (
-        <View style={styles.noDocumentsContainer}>
-          <Text style={styles.noDocumentsIcon}>📁</Text>
-          <Text style={styles.noDocumentsTitle}>No Verification Documents</Text>
-          <Text style={styles.noDocumentsSubtitle}>
-            Upload government ID, business registration, or other verification documents
-          </Text>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.documentsContainer}>
-        <Text style={styles.documentsTitle}>Verification Documents</Text>
-        
-        {verificationStatus.verificationDocuments.map((doc, index) => (
-          <View key={doc.id} style={styles.documentItem}>
-            <View style={styles.documentInfo}>
-              <Text style={styles.documentName}>{doc.fileName}</Text>
-              <Text style={styles.documentType}>
-                {doc.fileType.toUpperCase()} • 
-                Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}
-              </Text>
-              
-              <View style={styles.documentStatus}>
-                <Text style={[
-                  styles.documentStatusText,
-                  { color: getStatusColor(doc.verificationStatus) }
-                ]}>
-                  {doc.verificationStatus === 'approved' && '✓ Approved'}
-                  {doc.verificationStatus === 'rejected' && '✗ Rejected'}
-                  {doc.verificationStatus === 'pending' && '⏳ Pending Review'}
-                </Text>
-              </View>
-
-              {doc.verificationNotes && (
-                <Text style={styles.verificationNotes}>
-                  Notes: {doc.verificationNotes}
-                </Text>
-              )}
-            </View>
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  const renderVerificationInfo = () => (
-    <View style={styles.infoContainer}>
-      <Text style={styles.infoTitle}>Why Get Verified?</Text>
-      
-      <View style={styles.infoPoints}>
-        <View style={styles.infoPoint}>
-          <Text style={styles.infoPointIcon}>🛡️</Text>
-          <Text style={styles.infoPointText}>
-            Build trust with potential co-founders
-          </Text>
-        </View>
-        
-        <View style={styles.infoPoint}>
-          <Text style={styles.infoPointIcon}>⭐</Text>
-          <Text style={styles.infoPointText}>
-            Get priority matching and visibility
-          </Text>
-        </View>
-        
-        <View style={styles.infoPoint}>
-          <Text style={styles.infoPointIcon}>🔒</Text>
-          <Text style={styles.infoPointText}>
-            Show you're serious about finding partners
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.acceptedDocuments}>
-        <Text style={styles.acceptedTitle}>Accepted Documents:</Text>
-        <Text style={styles.acceptedList}>
-          • Government ID (Aadhaar, Passport, Driver's License){'\n'}
-          • Business Registration Certificate{'\n'}
-          • Professional Certifications{'\n'}
-          • Educational Degrees{'\n'}
-          • Company Letterhead
+        <Text style={styles.statusDesc}>
+          {status === 'verified' && 'Your profile is verified. You have earned the verified partner badge.'}
+          {status === 'pending' && 'We are reviewing your documents. This usually takes 24-48 hours.'}
+          {status === 'rejected' && 'One or more of your documents were rejected. Please check the notes below.'}
+          {status === 'not_verified' && 'Verify your identity to build trust and get better matching priority.'}
         </Text>
       </View>
-    </View>
-  );
-
-  if (isLoading && !verificationStatus) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading verification status...</Text>
-      </View>
     );
-  }
+  };
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-    >
-      {renderVerificationStatus()}
-      
-      {renderVerificationDocuments()}
-      
-      {renderVerificationInfo()}
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" />
 
-      <View style={styles.actionContainer}>
-        <TouchableOpacity
-          style={[styles.uploadButton, uploading && styles.disabledButton]}
-          onPress={handleUploadDocument}
-          disabled={uploading}
-        >
-          <Text style={styles.uploadButtonText}>
-            {uploading ? 'Uploading...' : 'Upload Verification Document'}
-          </Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={24} color="#000" />
         </TouchableOpacity>
+        <Text style={styles.headerLogo}>FOUND.</Text>
+        <View style={{ width: 40 }} />
       </View>
-    </ScrollView>
+
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      >
+        <View style={styles.content}>
+          <Text style={styles.pageTitle}>Profile Verification</Text>
+          <Text style={styles.pageSub}>Increase your credibility by verifying your professional identity.</Text>
+
+          {renderStatusCard()}
+
+          <Text style={styles.sectionTitle}>Uploaded Documents</Text>
+          {verificationStatus?.verificationDocuments?.length > 0 ? (
+            verificationStatus.verificationDocuments.map((doc, idx) => {
+              const docInfo = getStatusInfo(doc.verificationStatus);
+              return (
+                <View key={idx} style={styles.docItem}>
+                  <View style={styles.docIconBox}>
+                    <Ionicons name="document" size={20} color="#666" />
+                  </View>
+                  <View style={styles.docContent}>
+                    <Text style={styles.docName} numberOfLines={1}>{doc.fileName}</Text>
+                    <Text style={styles.docDate}>Uploaded {new Date(doc.uploadedAt).toLocaleDateString()}</Text>
+                  </View>
+                  <View style={[styles.docBadge, { backgroundColor: docInfo.bg }]}>
+                    <Text style={[styles.docBadgeText, { color: docInfo.color }]}>
+                      {doc.verificationStatus.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          ) : (
+            <View style={styles.emptyBox}>
+              <Ionicons name="cloud-upload-outline" size={40} color="#DDD" />
+              <Text style={styles.emptyText}>No documents uploaded yet.</Text>
+            </View>
+          )}
+
+          <Text style={styles.sectionTitle}>Why get verified?</Text>
+          <View style={styles.benefitCard}>
+            <View style={styles.benefitRow}>
+              <Ionicons name="shield-checkmark-outline" size={20} color="#1155ccff" />
+              <Text style={styles.benefitText}>Build trust with high-quality co-founders</Text>
+            </View>
+            <View style={styles.benefitRow}>
+              <Ionicons name="trending-up-outline" size={20} color="#1155ccff" />
+              <Text style={styles.benefitText}>Higher visibility in the discovery pool</Text>
+            </View>
+            <View style={styles.benefitRow}>
+              <Ionicons name="star-outline" size={20} color="#1155ccff" />
+              <Text style={styles.benefitText}>Unlock exclusive verified-only features</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.uploadBtn, uploading && { opacity: 0.7 }]}
+            onPress={handleUploadDocument}
+            disabled={uploading}
+          >
+            {uploading ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <>
+                <Ionicons name="add" size={24} color="#FFF" style={{ marginRight: 8 }} />
+                <Text style={styles.uploadBtnText}>Upload New Document</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 15 : 15,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F2',
+  },
+  headerLogo: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 1,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F7F7F7',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#7A7A7A',
-  },
-  statusContainer: {
+  content: {
     padding: 20,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#000',
+    marginBottom: 8,
+  },
+  pageSub: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 25,
   },
   statusCard: {
-    backgroundColor: '#EFE9E1',
-    borderRadius: 12,
     padding: 20,
-    borderWidth: 2,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    marginBottom: 30,
   },
-  statusHeader: {
+  statusHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  statusLabel: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  statusDesc: {
+    fontSize: 14,
+    color: '#444',
+    lineHeight: 20,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#999',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 15,
+    marginTop: 10,
+  },
+  docItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FDFDFD',
+    padding: 15,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
     marginBottom: 12,
   },
-  statusIcon: {
-    fontSize: 24,
+  docIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 12,
   },
-  statusText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  statusDescription: {
-    fontSize: 16,
-    color: '#4A4A4A',
-    lineHeight: 24,
-  },
-  documentsContainer: {
-    padding: 20,
-  },
-  documentsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 16,
-  },
-  documentItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-  },
-  documentInfo: {
+  docContent: {
     flex: 1,
   },
-  documentName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4A4A4A',
-    marginBottom: 4,
-  },
-  documentType: {
+  docName: {
     fontSize: 14,
-    color: '#7A7A7A',
-    marginBottom: 8,
+    fontWeight: '700',
+    color: '#333',
   },
-  documentStatus: {
-    alignSelf: 'flex-start',
-    marginBottom: 4,
+  docDate: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 2,
   },
-  documentStatusText: {
+  docBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  docBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 30,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 18,
+    borderStyle: 'dashed',
+    borderWidth: 1.5,
+    borderColor: '#E0E0E0',
+    marginBottom: 25,
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 10,
+  },
+  benefitCard: {
+    backgroundColor: '#FDFDFD',
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    marginBottom: 30,
+    gap: 15,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  benefitText: {
     fontSize: 14,
+    color: '#555',
     fontWeight: '500',
   },
-  verificationNotes: {
-    fontSize: 12,
-    color: '#7A7A7A',
-    fontStyle: 'italic',
-  },
-  noDocumentsContainer: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  noDocumentsIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  noDocumentsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  noDocumentsSubtitle: {
-    fontSize: 14,
-    color: '#7A7A7A',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  infoContainer: {
-    padding: 20,
-  },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
-    marginBottom: 16,
-  },
-  infoPoints: {
-    marginBottom: 24,
-  },
-  infoPoint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  infoPointIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  infoPointText: {
-    fontSize: 16,
-    color: '#4A4A4A',
-    flex: 1,
-  },
-  acceptedDocuments: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-  },
-  acceptedTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4A4A4A',
-    marginBottom: 8,
-  },
-  acceptedList: {
-    fontSize: 14,
-    color: '#4A4A4A',
-    lineHeight: 20,
-  },
-  actionContainer: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  uploadButton: {
+  uploadBtn: {
     backgroundColor: '#1155ccff',
-    borderRadius: 8,
-    paddingVertical: 16,
+    height: 56,
+    borderRadius: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#1155cc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  uploadButtonText: {
-    color: '#FFFFFF',
+  uploadBtnText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#FFF',
   },
 });
 
